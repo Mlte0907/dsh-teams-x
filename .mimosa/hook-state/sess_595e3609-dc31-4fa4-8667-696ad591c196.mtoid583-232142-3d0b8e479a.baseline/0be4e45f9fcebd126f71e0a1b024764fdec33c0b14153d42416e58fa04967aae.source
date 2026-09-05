@@ -1,15 +1,23 @@
 /**
- * TeamsX activity panel: live roster, task DAG, and captain inbox preview.
+ * TeamsX activity panel, mounted as a session-scoped header action.
  *
- * Lean by design — the reference panel is 57 KB of layout machinery; this
- * panel covers the same information with a third of the code: a poller, one
- * team card renderer (with the all-SVG icon system), and a stop control.
- * All state lives in one hook; icons come from icons.tsx.
+ * The badge registers into `conversation.session.header.actions` (next to the
+ * autonomous-mode and Session-log controls), so it only ever exists inside an
+ * open session's title bar. The framework resolves `sessionId` for
+ * session-scoped slots, and the badge renders nothing unless a team belongs
+ * to THIS session (captain or member id match) — switching to a session that
+ * never used TeamsX shows no badge at all.
+ *
+ * The expanded panel portals to document.body as a fixed-position card
+ * anchored under the badge; placement probes elementFromPoint so third-party
+ * higher-layer docks (better-sidebar) cannot cover it.
  * @module dsh-teams-x/client/ActivityPanel
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { ReactElement } from 'react'
+import type { ReactElement, RefObject } from 'react'
+import { createPortal } from 'react-dom'
+import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import css from './ActivityPanel.module.css'
 import {
   ACTIVITY_ICONS,
@@ -31,10 +39,8 @@ export const POLL_INTERVAL_MS = 4_000
 /** Locale formatter supplied by the harness locale service. */
 export type PanelTranslate = (key: TeamsXLocaleKey, params?: Record<string, string | number>) => string
 
-export interface ActivityPanelProps {
-  /** Translate function bound to the `teamsX` locale namespace. */
-  readonly t: PanelTranslate
-}
+export interface ActivityPanelProps
+  extends PropsRuntime<'conversation.session.header.actions'>, PropsLocale<'teamsX'> {}
 
 interface StateResponse {
   teams: TeamActivitySnapshot[]
@@ -51,48 +57,6 @@ function format(template: string, params: Record<string, string | number> | unde
 /** Wrap the harness translate function with interpolation. */
 function makeT(t: PanelTranslate): (key: TeamsXLocaleKey, params?: Record<string, string | number>) => string {
   return (key, params) => format(t(key, params), params)
-}
-
-/**
- * Shift the floating surface left until nothing paints above it. Third-party
- * overlay panels (e.g. better-sidebar's right dock) live in higher stacking
- * layers than shell.overlay, so no z-index inside the overlay can win — the
- * only robust fix is measured avoidance. Probes elementFromPoint at the
- * surface's center and walks candidate `right` offsets; re-probes on resize
- * and on an interval so a closed panel returns the surface to its preferred
- * spot.
- */
-function useAvoidCover(surfaceRef: React.RefObject<HTMLElement | null>): number {
-  const [shift, setShift] = useState(18)
-  useEffect(() => {
-    const PREFERRED = 18
-    const CANDIDATES = [18, 60, 120, 200, 300, 420, 520]
-    const probe = (): void => {
-      const el = surfaceRef.current
-      if (el === null) return
-      for (const candidate of CANDIDATES) {
-        el.style.right = `${candidate}px`
-        const rect = el.getBoundingClientRect()
-        if (rect.width === 0) return
-        const top = document.elementFromPoint(
-          rect.left + rect.width / 2,
-          rect.top + rect.height / 2,
-        )
-        if (top === null || el === top || el.contains(top)) {
-          setShift(candidate)
-          return
-        }
-      }
-    }
-    probe()
-    const timer = window.setInterval(probe, 1500)
-    window.addEventListener('resize', probe)
-    return () => {
-      window.clearInterval(timer)
-      window.removeEventListener('resize', probe)
-    }
-  }, [surfaceRef])
-  return shift
 }
 
 /** Poll the state endpoint: once on mount, then on an interval ONLY while expanded. */
@@ -130,6 +94,61 @@ function useTeamSnapshots(expanded: boolean): { teams: TeamActivitySnapshot[]; e
   return { teams, error, reload: () => setTick((value) => value + 1) }
 }
 
+/**
+ * Place the expanded panel under the badge, then shift it left until nothing
+ * paints above it. Third-party overlay docks (e.g. better-sidebar) live in
+ * higher stacking layers than a portal can assume, so placement is measured:
+ * probe elementFromPoint at the panel's header and walk candidate `right`
+ * offsets; re-probe on resize/interval so a closed dock returns the panel.
+ */
+function usePanelPlacement(
+  badgeRef: RefObject<HTMLButtonElement | null>,
+  panelRef: RefObject<HTMLDivElement | null>,
+  expanded: boolean,
+): { top: number; right: number } {
+  const [pos, setPos] = useState({ top: 96, right: 18 })
+  useEffect(() => {
+    if (!expanded) return
+    const place = (): void => {
+      const badge = badgeRef.current
+      if (badge === null) return
+      const rect = badge.getBoundingClientRect()
+      let top = rect.bottom + 6
+      const maxH = Math.min(window.innerHeight * 0.72, 640)
+      if (top + maxH > window.innerHeight - 8) {
+        top = Math.max(8, window.innerHeight - maxH - 8)
+      }
+      const preferred = Math.max(8, window.innerWidth - rect.right)
+      const panel = panelRef.current
+      let right = preferred
+      if (panel !== null) {
+        const candidates = [preferred, preferred + 80, preferred + 180, preferred + 320, preferred + 480]
+        for (const candidate of candidates) {
+          panel.style.right = `${candidate}px`
+          const r = panel.getBoundingClientRect()
+          if (r.width === 0) break
+          const probeY = Math.min(r.top + 20, window.innerHeight - 1)
+          const topEl = document.elementFromPoint(r.left + Math.min(60, r.width / 2), probeY)
+          if (topEl === null || panel === topEl || panel.contains(topEl)) {
+            right = candidate
+            break
+          }
+          right = candidate
+        }
+      }
+      setPos((prev) => (prev.top === top && prev.right === right ? prev : { top, right }))
+    }
+    place()
+    const timer = window.setInterval(place, 1500)
+    window.addEventListener('resize', place)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('resize', place)
+    }
+  }, [badgeRef, panelRef, expanded])
+  return pos
+}
+
 /** POST the halt route for one team. */
 async function haltTeam(captainSessionId: string, teamId: string): Promise<void> {
   const response = await fetch(TEAMSX_HALT_URL, {
@@ -155,7 +174,7 @@ function MemberRow({ member, t }: { member: TeamActivitySnapshot['members'][numb
     <div className={css.memberRow} data-activity={member.activity}>
       <span className={css.memberIcon}>
         {RoleIcon !== undefined
-          ? <RoleIcon size={18} />
+          ? <RoleIcon size={18} decorative />
           : <TeamsXLogo size={18} label={member.name} />}
       </span>
       <span className={css.memberName} title={member.name}>{member.name}</span>
@@ -165,7 +184,7 @@ function MemberRow({ member, t }: { member: TeamActivitySnapshot['members'][numb
         <span className={css.memberUnread} title={t('member.unread', { count: member.unread })}>{member.unread}</span>
       )}
       <span className={css.memberState}>
-        {ActivityIcon !== undefined && <ActivityIcon size={14} className={member.activity === 'working' ? css.animPulse : undefined} />}
+        {ActivityIcon !== undefined && <ActivityIcon size={14} className={member.activity === 'working' ? css.animPulse : undefined} decorative />}
         {t(stateKey)}
       </span>
     </div>
@@ -182,7 +201,7 @@ function TaskRow({ task, t }: { task: TeamActivitySnapshot['tasks'][number]; t: 
       : task.assignee
   return (
     <div className={css.taskRow} data-state={task.state} style={{ marginInlineStart: `${Math.min(task.depth, 4) * 18}px` }}>
-      <span className={css.taskIcon}>{StateIcon !== undefined && <StateIcon size={14} className={task.state === 'running' ? css.animPulse : undefined} />}</span>
+      <span className={css.taskIcon}>{StateIcon !== undefined && <StateIcon size={14} className={task.state === 'running' ? css.animPulse : undefined} decorative />}</span>
       <span className={css.taskId}>{task.id}</span>
       <span className={css.taskSubject} title={task.description || task.subject}>{task.subject}</span>
       <span className={css.taskAssignee}>{assignee}</span>
@@ -214,7 +233,7 @@ function TeamCard({ team, t }: { team: TeamActivitySnapshot; t: ReturnType<typeo
   return (
     <section className={css.teamCard} data-phase={team.phase} data-halted={team.halted === true || undefined}>
       <header className={css.teamHeader}>
-        <TeamsXLogo size={20} className={css.teamLogo} />
+        <TeamsXLogo size={20} className={css.teamLogo} decorative />
         <div className={css.teamTitleBlock}>
           <h3 className={css.teamName}>{team.name}</h3>
           {team.description !== undefined && <p className={css.teamGoal}>{team.description}</p>}
@@ -277,53 +296,58 @@ function TeamCard({ team, t }: { team: TeamActivitySnapshot; t: ReturnType<typeo
   )
 }
 
-/** The panel shell: a collapsed floating badge by default; expanded on click. */
-export function ActivityPanel({ t }: ActivityPanelProps): ReactElement | null {
+/**
+ * The session-scoped shell: a header chip that exists only when THIS session
+ * owns or participates in a live team; the expanded panel portals to body.
+ */
+export function ActivityPanel({ sessionId, t }: ActivityPanelProps): ReactElement | null {
   const translate = useMemo(() => makeT(t), [t])
-  // Collapsed by default: the shell.overlay layer covers the whole app, so
-  // this component must occupy nothing until the user opens it.
   const [expanded, setExpanded] = useState(false)
-  // A single shared surface ref feeds useAvoidCover; the callback ref is the
-  // boundary between the generic probe and the concrete button/div elements.
-  const surfaceRef = useRef<HTMLElement | null>(null)
-  const setSurface = (el: HTMLElement | null): void => { surfaceRef.current = el }
-  const shift = useAvoidCover(surfaceRef)
+  const badgeRef = useRef<HTMLButtonElement | null>(null)
+  const panelRef = useRef<HTMLDivElement | null>(null)
   const { teams, error, reload } = useTeamSnapshots(expanded)
-  const activeTeams = teams.filter((team) => team.halted !== true)
-  const workingCount = activeTeams.reduce((count, team) => (
+  // Session scoping: only teams led (or joined as a member) by the session
+  // whose header hosts this badge are visible here. Other sessions' teams,
+  // and sessions that never used TeamsX, render nothing.
+  const sessionTeams = useMemo(() => teams.filter((team) => (
+    team.captainSessionId === sessionId
+    || team.members.some((member) => member.id === sessionId)
+  )), [teams, sessionId])
+  const workingCount = sessionTeams.reduce((count, team) => (
     count + team.members.filter((member) => member.activity === 'working').length
   ), 0)
+  const placement = usePanelPlacement(badgeRef, panelRef, expanded)
 
   if (!expanded) {
-    // No teams and no error: render nothing at all into the overlay layer.
-    if (teams.length === 0 && error === undefined) return null
+    // No teams in this session (and no fetch error): render nothing — the
+    // header shows no TeamsX control at all.
+    if (sessionTeams.length === 0 && error === undefined) return null
     return (
       <button
         type='button'
-        ref={setSurface}
+        ref={badgeRef}
         className={css.badgeFab}
-        style={{ right: `${shift}px` }}
         onClick={() => { setExpanded(true) }}
         aria-label={translate('panel.aria')}
         title={translate('panel.title')}
       >
-        <TeamsXLogo size={16} />
-        <span className={css.badgeFabCount}>{teams.length}</span>
+        <TeamsXLogo size={14} decorative />
+        <span className={css.badgeFabCount}>{sessionTeams.length}</span>
         {workingCount > 0 && <span className={css.badgeFabBusy} data-busy>{workingCount}</span>}
       </button>
     )
   }
 
-  return (
+  return createPortal(
     <div
       className={css.panelWindow}
-      ref={setSurface}
-      style={{ right: `${shift}px` }}
+      ref={panelRef}
+      style={{ top: `${placement.top}px`, right: `${placement.right}px` }}
       role='region'
       aria-label={translate('panel.aria')}
     >
       <header className={css.panelHeader}>
-        <h2 className={css.panelTitle}><TeamsXLogo size={18} /> {translate('panel.title')}</h2>
+        <h2 className={css.panelTitle}><TeamsXLogo size={18} decorative /> {translate('panel.title')}</h2>
         <button type='button' className={css.refreshButton} onClick={reload} aria-label={translate('panel.refresh')}>
           <span className={css.animSpin}>⟳</span>
         </button>
@@ -332,12 +356,13 @@ export function ActivityPanel({ t }: ActivityPanelProps): ReactElement | null {
         </button>
       </header>
       {error !== undefined && <p className={css.panelError}>{translate('panel.error', { message: error })}</p>}
-      {error === undefined && teams.length === 0 && (
+      {error === undefined && sessionTeams.length === 0 && (
         <p className={css.panelEmpty}>{translate('panel.empty')}</p>
       )}
       <div className={css.teamList}>
-        {teams.map((team) => <TeamCard key={`${team.workspace}/${team.teamId}`} team={team} t={translate} />)}
+        {sessionTeams.map((team) => <TeamCard key={`${team.workspace}/${team.teamId}`} team={team} t={translate} />)}
       </div>
-    </div>
+    </div>,
+    document.body,
   )
 }

@@ -38,7 +38,7 @@
     "client": {
       "inject": [
         "@deepseek-ai/dsh-client-locale",
-        "@deepseek-ai/dsh-client-ui-layout",
+        "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-renderer"
       ],
       "platform": "web"
@@ -127,6 +127,7 @@
     "@deepseek-ai/schemastery": "link:/home/xiaoxin/deepseek-harness/vendor/schemastery",
     "@types/node": "^24.13.3",
     "@types/react": "~18.3.1",
+    "@types/react-dom": "^18.3.7",
     "lightningcss": "^1.33.0",
     "react": "^18.2.0",
     "react-dom": "^18.3.1",

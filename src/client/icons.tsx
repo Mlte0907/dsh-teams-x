@@ -19,9 +19,11 @@ export interface IconProps {
   readonly className?: string
   /** Accessible label; defaults to the icon's own label. */
   readonly label?: string
+  /** Hide from assistive tech when the icon is purely decorative next to text. */
+  readonly decorative?: boolean
 }
 
-function IconSvg({ body, label, size = 16, className }: IconProps & { body: string }): ReactElement {
+function IconSvg({ body, label, size = 16, className, decorative }: IconProps & { body: string }): ReactElement {
   return (
     <svg
       viewBox='0 0 24 24'
@@ -33,8 +35,9 @@ function IconSvg({ body, label, size = 16, className }: IconProps & { body: stri
       strokeLinecap={ICON_STROKE.linecap}
       strokeLinejoin={ICON_STROKE.linejoin}
       className={className}
-      role='img'
-      aria-label={label}
+      role={decorative === true ? undefined : 'img'}
+      aria-hidden={decorative === true || undefined}
+      aria-label={decorative === true ? undefined : label}
     >
       <g dangerouslySetInnerHTML={{ __html: body }} />
     </svg>

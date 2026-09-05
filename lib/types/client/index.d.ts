@@ -1,9 +1,11 @@
 /**
  * Browser plugin for the TeamsX activity panel.
  *
- * Registers the locale dictionaries and mounts the activity panel in the
- * shell's additive overlay slot. Leaner than the reference client: one panel,
- * one slot, one card — no conversation-node card in v0.1 (roadmap item).
+ * Registers the locale dictionaries and mounts the activity badge into the
+ * session header's action list (`conversation.session.header.actions`, next
+ * to the autonomous-mode and Session-log controls). The slot is
+ * session-scoped: the framework resolves the current `sessionId`, and the
+ * badge renders only when this session owns or participates in a team.
  * @module dsh-teams-x/client
  */
 import type { Context as ClientContext } from '@deepseek-ai/cordis';

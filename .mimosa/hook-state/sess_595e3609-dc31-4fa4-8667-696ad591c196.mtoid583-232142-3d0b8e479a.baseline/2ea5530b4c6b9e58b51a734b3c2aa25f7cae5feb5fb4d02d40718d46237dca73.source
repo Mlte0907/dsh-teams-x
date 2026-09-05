@@ -22,9 +22,6 @@ export declare const TEAMSX_STATE_URL = "/plugins/dsh-teams-x/state";
 export declare const TEAMSX_HALT_URL = "/plugins/dsh-teams-x/halt";
 /** Poll cadence for the live view. */
 export declare const POLL_INTERVAL_MS = 4000;
-/** Collapsed discovery cadence: slow, but fast enough to notice a team the
- * session creates after this badge mounted. */
-export declare const DISCOVERY_INTERVAL_MS = 10000;
 /** Locale formatter supplied by the harness locale service. */
 export type PanelTranslate = (key: TeamsXLocaleKey, params?: Record<string, string | number>) => string;
 export interface ActivityPanelProps extends PropsRuntime<'conversation.session.header.actions'>, PropsLocale<'teamsX'> {

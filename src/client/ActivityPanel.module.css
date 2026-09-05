@@ -13,29 +13,22 @@
   color: var(--dsw-alias-label-primary, #f9fafb);
 }
 
-/* Collapsed floating badge: the only thing this plugin mounts into the
-   full-screen shell.overlay layer while closed. Preferred position is
-   top-right (the reference implementation's spot); the runtime shifts it
-   left via inline `right` when a higher-layer panel (better-sidebar's dock)
-   covers it — see useAvoidCover. */
+/* Collapsed badge: an in-flow chip inside the session header's action list,
+   next to the autonomous-mode and Session-log controls. It only renders for
+   sessions that own or participate in a team. */
 .badgeFab {
-  position: absolute;
-  top: 64px;
-  right: 18px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
+  height: 26px;
+  padding: 0 10px;
   border-radius: 999px;
   border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
-  background: var(--dsw-alias-bg-layer-1, #232324);
+  background: var(--dsw-alias-bg-layer-2, #2c2c2e);
   color: var(--dsw-alias-state-business-primary, #679efe);
   font-size: 12px;
   cursor: pointer;
-  box-shadow: 0 2px 8px var(--dsw-alias-bg-mask-3, rgba(0, 0, 0, 0.48));
-  width: fit-content;
-  height: fit-content;
-  transition: border-color 120ms ease, transform 120ms ease;
+  transition: border-color 120ms ease, background 120ms ease;
 }
 
 .badgeFab:hover {
@@ -62,12 +55,10 @@
   animation: teamsx-pulse 1.6s ease-in-out infinite;
 }
 
-/* Expanded panel window: fixed-size floating card, never full-screen.
-   Anchored under the badge; shifted left together with it by useAvoidCover. */
+/* Expanded panel window: a fixed-position card portaled to document.body,
+   anchored under the badge via inline top/right from usePanelPlacement. */
 .panelWindow {
-  position: absolute;
-  top: 104px;
-  right: 18px;
+  position: fixed;
   width: 400px;
   max-width: calc(100vw - 32px);
   max-height: min(72vh, 640px);

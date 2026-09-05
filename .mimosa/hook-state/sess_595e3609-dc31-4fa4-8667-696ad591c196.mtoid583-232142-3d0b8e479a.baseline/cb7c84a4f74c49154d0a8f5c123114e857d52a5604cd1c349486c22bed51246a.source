@@ -16,6 +16,8 @@ export interface IconProps {
     readonly className?: string;
     /** Accessible label; defaults to the icon's own label. */
     readonly label?: string;
+    /** Hide from assistive tech when the icon is purely decorative next to text. */
+    readonly decorative?: boolean;
 }
 export type IconComponent = (props: IconProps) => ReactElement;
 export declare const TeamsXLogo: IconComponent;

@@ -94,9 +94,12 @@ const { renderToString } = await import('react-dom/server')
 const React = externals.react
 const { ActivityPanel } = await import('../lib/client/ActivityPanel.js')
 const t = (key, params) => (params === undefined ? key : `${key}?${JSON.stringify(params)}`)
-const emptyHtml = renderToString(React.createElement(ActivityPanel, { t }))
+const emptyHtml = renderToString(React.createElement(ActivityPanel, {
+  sessionId: 'session-smoke',
+  t,
+}))
 if (emptyHtml.trim() !== '') {
-  throw new Error(`empty state must render nothing into the overlay layer, got ${emptyHtml.length} chars`)
+  throw new Error(`badge must be hidden for a session without teams, got ${emptyHtml.length} chars`)
 }
-console.log('empty-state render: nothing mounted into shell.overlay (PASS)')
+console.log('session without teams renders no badge (PASS)')
 console.log('client bundle smoke test: PASS (load + apply + render)')
