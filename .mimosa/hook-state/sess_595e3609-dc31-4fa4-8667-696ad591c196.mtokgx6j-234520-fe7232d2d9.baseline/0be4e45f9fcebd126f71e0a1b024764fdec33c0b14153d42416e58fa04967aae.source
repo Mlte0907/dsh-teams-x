@@ -63,14 +63,21 @@ function makeT(t: PanelTranslate): (key: TeamsXLocaleKey, params?: Record<string
 }
 
 /** Poll the state endpoint: once on mount, then on an interval ONLY while expanded. */
-function useTeamSnapshots(expanded: boolean): { teams: TeamActivitySnapshot[]; error?: string; reload: () => void } {
+function useTeamSnapshots(expanded: boolean): {
+  teams: TeamActivitySnapshot[]
+  error?: string
+  loading: boolean
+  reload: () => void
+} {
   const [teams, setTeams] = useState<TeamActivitySnapshot[]>([])
   const [error, setError] = useState<string | undefined>(undefined)
+  const [loading, setLoading] = useState(false)
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
     let disposed = false
     const load = async (): Promise<void> => {
+      setLoading(true)
       try {
         const response = await fetch(TEAMSX_STATE_URL, { headers: { accept: 'application/json' } })
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
@@ -81,6 +88,8 @@ function useTeamSnapshots(expanded: boolean): { teams: TeamActivitySnapshot[]; e
         }
       } catch (cause: unknown) {
         if (!disposed) setError(cause instanceof Error ? cause.message : String(cause))
+      } finally {
+        if (!disposed) setLoading(false)
       }
     }
     void load()
@@ -94,7 +103,7 @@ function useTeamSnapshots(expanded: boolean): { teams: TeamActivitySnapshot[]; e
     }
   }, [expanded, tick])
 
-  return { teams, error, reload: () => setTick((value) => value + 1) }
+  return { teams, error, loading, reload: () => setTick((value) => value + 1) }
 }
 
 /**
@@ -308,7 +317,7 @@ export function ActivityPanel({ sessionId, t }: ActivityPanelProps): ReactElemen
   const [expanded, setExpanded] = useState(false)
   const badgeRef = useRef<HTMLButtonElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
-  const { teams, error, reload } = useTeamSnapshots(expanded)
+  const { teams, error, loading, reload } = useTeamSnapshots(expanded)
   // Session scoping: only teams led (or joined as a member) by the session
   // whose header hosts this badge are visible here. Other sessions' teams,
   // and sessions that never used TeamsX, render nothing.
@@ -321,51 +330,92 @@ export function ActivityPanel({ sessionId, t }: ActivityPanelProps): ReactElemen
   ), 0)
   const placement = usePanelPlacement(badgeRef, panelRef, expanded)
 
-  if (!expanded) {
-    // No teams in this session (and no fetch error): render nothing — the
-    // header shows no TeamsX control at all.
-    if (sessionTeams.length === 0 && error === undefined) return null
-    return (
-      <button
-        type='button'
-        ref={badgeRef}
-        className={css.badgeFab}
-        onClick={() => { setExpanded(true) }}
-        aria-label={translate('panel.aria')}
-        title={translate('panel.title')}
-      >
-        <TeamsXLogo size={14} decorative />
-        <span className={css.badgeFabCount}>{sessionTeams.length}</span>
-        {workingCount > 0 && <span className={css.badgeFabBusy} data-busy>{workingCount}</span>}
-      </button>
-    )
-  }
+  // Drop the panel on any pointer outside badge + panel, matching the
+  // subagent-count dropdown's dismiss behavior.
+  useEffect(() => {
+    if (!expanded) return
+    const onPointerDown = (event: PointerEvent): void => {
+      const target = event.target as Node | null
+      if (target === null) return
+      if (panelRef.current?.contains(target) === true) return
+      if (badgeRef.current?.contains(target) === true) return
+      setExpanded(false)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => { document.removeEventListener('pointerdown', onPointerDown) }
+  }, [expanded])
 
-  return createPortal(
-    <div
-      className={css.panelWindow}
-      ref={panelRef}
-      style={{ top: `${placement.top}px`, right: `${placement.right}px` }}
-      role='region'
+  // No teams in this session (and no fetch error): render nothing — the
+  // header shows no TeamsX control at all.
+  if (sessionTeams.length === 0 && error === undefined) return null
+
+  // The badge STAYS mounted while expanded (it is the anchor the panel
+  // positions under, and the outside-click toggle target); the expanded
+  // panel portals to document.body as a dropdown beneath it.
+  const badge = (
+    <button
+      type='button'
+      ref={badgeRef}
+      className={css.badgeFab}
+      data-expanded={expanded === true || undefined}
+      onClick={() => { setExpanded((value) => !value) }}
       aria-label={translate('panel.aria')}
+      aria-expanded={expanded === true || undefined}
+      title={translate('panel.title')}
     >
-      <header className={css.panelHeader}>
-        <h2 className={css.panelTitle}><TeamsXLogo size={18} decorative /> {translate('panel.title')}</h2>
-        <button type='button' className={css.refreshButton} onClick={reload} aria-label={translate('panel.refresh')}>
-          <span className={css.animSpin}>⟳</span>
-        </button>
-        <button type='button' className={css.refreshButton} onClick={() => { setExpanded(false) }} aria-label={translate('panel.refresh')}>
-          ✕
-        </button>
-      </header>
-      {error !== undefined && <p className={css.panelError}>{translate('panel.error', { message: error })}</p>}
-      {error === undefined && sessionTeams.length === 0 && (
-        <p className={css.panelEmpty}>{translate('panel.empty')}</p>
+      <TeamsXLogo size={14} decorative />
+      <span className={css.badgeFabCount}>{sessionTeams.length}</span>
+      {workingCount > 0 && <span className={css.badgeFabBusy} data-busy>{workingCount}</span>}
+    </button>
+  )
+
+  if (!expanded) return badge
+
+  return (
+    <>
+      {badge}
+      {createPortal(
+        <div
+          className={css.panelWindow}
+          ref={panelRef}
+          style={{ top: `${placement.top}px`, right: `${placement.right}px` }}
+          role='region'
+          aria-label={translate('panel.aria')}
+        >
+          <header className={css.panelHeader}>
+            <h2 className={css.panelTitle}><TeamsXLogo size={18} decorative /> {translate('panel.title')}</h2>
+            <div className={css.panelActions}>
+              <button
+                type='button'
+                className={css.refreshButton}
+                onClick={reload}
+                data-loading={loading === true || undefined}
+                aria-label={translate('panel.refresh')}
+                title={translate('panel.refresh')}
+              >
+                <span className={loading === true ? css.animSpin : undefined}>⟳</span>
+              </button>
+              <button
+                type='button'
+                className={css.refreshButton}
+                onClick={() => { setExpanded(false) }}
+                aria-label={translate('panel.close')}
+                title={translate('panel.close')}
+              >
+                ✕
+              </button>
+            </div>
+          </header>
+          {error !== undefined && <p className={css.panelError}>{translate('panel.error', { message: error })}</p>}
+          {error === undefined && sessionTeams.length === 0 && (
+            <p className={css.panelEmpty}>{translate('panel.empty')}</p>
+          )}
+          <div className={css.teamList}>
+            {sessionTeams.map((team) => <TeamCard key={`${team.workspace}/${team.teamId}`} team={team} t={translate} />)}
+          </div>
+        </div>,
+        document.body,
       )}
-      <div className={css.teamList}>
-        {sessionTeams.map((team) => <TeamCard key={`${team.workspace}/${team.teamId}`} team={team} t={translate} />)}
-      </div>
-    </div>,
-    document.body,
+    </>
   )
 }

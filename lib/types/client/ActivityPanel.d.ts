@@ -20,6 +20,8 @@ import type { TeamsXLocaleKey } from './locale-keys.ts';
 export declare const TEAMSX_STATE_URL = "/plugins/dsh-teams-x/state";
 /** Halt endpoint served by the host plane. */
 export declare const TEAMSX_HALT_URL = "/plugins/dsh-teams-x/halt";
+/** Per-member pause endpoint served by the host plane. */
+export declare const TEAMSX_PAUSE_URL = "/plugins/dsh-teams-x/member/pause";
 /** Poll cadence for the live view. */
 export declare const POLL_INTERVAL_MS = 4000;
 /** Collapsed discovery cadence: slow, but fast enough to notice a team the

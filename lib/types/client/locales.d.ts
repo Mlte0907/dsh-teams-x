@@ -38,6 +38,7 @@ export declare const zh: {
     'member.state.unspawned': string;
     'member.unread': string;
     'member.progress': string;
+    'member.pause': string;
     'task.status.pending': string;
     'task.status.claimed': string;
     'task.status.in_progress': string;

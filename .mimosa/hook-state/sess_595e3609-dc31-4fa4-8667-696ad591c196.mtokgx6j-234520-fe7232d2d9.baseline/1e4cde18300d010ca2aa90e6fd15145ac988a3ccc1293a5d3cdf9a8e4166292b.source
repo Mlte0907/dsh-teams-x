@@ -1,4 +1,4 @@
-import { jsx as _jsx, jsxs as _jsxs } from "react/jsx-runtime";
+import { jsx as _jsx, jsxs as _jsxs, Fragment as _Fragment } from "react/jsx-runtime";
 /**
  * TeamsX activity panel, mounted as a session-scoped header action.
  *
@@ -41,10 +41,12 @@ function makeT(t) {
 function useTeamSnapshots(expanded) {
     const [teams, setTeams] = useState([]);
     const [error, setError] = useState(undefined);
+    const [loading, setLoading] = useState(false);
     const [tick, setTick] = useState(0);
     useEffect(() => {
         let disposed = false;
         const load = async () => {
+            setLoading(true);
             try {
                 const response = await fetch(TEAMSX_STATE_URL, { headers: { accept: 'application/json' } });
                 if (!response.ok)
@@ -59,6 +61,10 @@ function useTeamSnapshots(expanded) {
                 if (!disposed)
                     setError(cause instanceof Error ? cause.message : String(cause));
             }
+            finally {
+                if (!disposed)
+                    setLoading(false);
+            }
         };
         void load();
         // Collapsed keeps a slow discovery cadence (a team may be created after
@@ -70,7 +76,7 @@ function useTeamSnapshots(expanded) {
             window.clearInterval(timer);
         };
     }, [expanded, tick]);
-    return { teams, error, reload: () => setTick((value) => value + 1) };
+    return { teams, error, loading, reload: () => setTick((value) => value + 1) };
 }
 /**
  * Place the expanded panel under the badge, then shift it left until nothing
@@ -192,7 +198,7 @@ export function ActivityPanel({ sessionId, t }) {
     const [expanded, setExpanded] = useState(false);
     const badgeRef = useRef(null);
     const panelRef = useRef(null);
-    const { teams, error, reload } = useTeamSnapshots(expanded);
+    const { teams, error, loading, reload } = useTeamSnapshots(expanded);
     // Session scoping: only teams led (or joined as a member) by the session
     // whose header hosts this badge are visible here. Other sessions' teams,
     // and sessions that never used TeamsX, render nothing.
@@ -200,12 +206,33 @@ export function ActivityPanel({ sessionId, t }) {
         || team.members.some((member) => member.id === sessionId))), [teams, sessionId]);
     const workingCount = sessionTeams.reduce((count, team) => (count + team.members.filter((member) => member.activity === 'working').length), 0);
     const placement = usePanelPlacement(badgeRef, panelRef, expanded);
-    if (!expanded) {
-        // No teams in this session (and no fetch error): render nothing — the
-        // header shows no TeamsX control at all.
-        if (sessionTeams.length === 0 && error === undefined)
-            return null;
-        return (_jsxs("button", { type: 'button', ref: badgeRef, className: css.badgeFab, onClick: () => { setExpanded(true); }, "aria-label": translate('panel.aria'), title: translate('panel.title'), children: [_jsx(TeamsXLogo, { size: 14, decorative: true }), _jsx("span", { className: css.badgeFabCount, children: sessionTeams.length }), workingCount > 0 && _jsx("span", { className: css.badgeFabBusy, "data-busy": true, children: workingCount })] }));
-    }
-    return createPortal(_jsxs("div", { className: css.panelWindow, ref: panelRef, style: { top: `${placement.top}px`, right: `${placement.right}px` }, role: 'region', "aria-label": translate('panel.aria'), children: [_jsxs("header", { className: css.panelHeader, children: [_jsxs("h2", { className: css.panelTitle, children: [_jsx(TeamsXLogo, { size: 18, decorative: true }), " ", translate('panel.title')] }), _jsx("button", { type: 'button', className: css.refreshButton, onClick: reload, "aria-label": translate('panel.refresh'), children: _jsx("span", { className: css.animSpin, children: "\u27F3" }) }), _jsx("button", { type: 'button', className: css.refreshButton, onClick: () => { setExpanded(false); }, "aria-label": translate('panel.refresh'), children: "\u2715" })] }), error !== undefined && _jsx("p", { className: css.panelError, children: translate('panel.error', { message: error }) }), error === undefined && sessionTeams.length === 0 && (_jsx("p", { className: css.panelEmpty, children: translate('panel.empty') })), _jsx("div", { className: css.teamList, children: sessionTeams.map((team) => _jsx(TeamCard, { team: team, t: translate }, `${team.workspace}/${team.teamId}`)) })] }), document.body);
+    // Drop the panel on any pointer outside badge + panel, matching the
+    // subagent-count dropdown's dismiss behavior.
+    useEffect(() => {
+        if (!expanded)
+            return;
+        const onPointerDown = (event) => {
+            const target = event.target;
+            if (target === null)
+                return;
+            if (panelRef.current?.contains(target) === true)
+                return;
+            if (badgeRef.current?.contains(target) === true)
+                return;
+            setExpanded(false);
+        };
+        document.addEventListener('pointerdown', onPointerDown);
+        return () => { document.removeEventListener('pointerdown', onPointerDown); };
+    }, [expanded]);
+    // No teams in this session (and no fetch error): render nothing — the
+    // header shows no TeamsX control at all.
+    if (sessionTeams.length === 0 && error === undefined)
+        return null;
+    // The badge STAYS mounted while expanded (it is the anchor the panel
+    // positions under, and the outside-click toggle target); the expanded
+    // panel portals to document.body as a dropdown beneath it.
+    const badge = (_jsxs("button", { type: 'button', ref: badgeRef, className: css.badgeFab, "data-expanded": expanded === true || undefined, onClick: () => { setExpanded((value) => !value); }, "aria-label": translate('panel.aria'), "aria-expanded": expanded === true || undefined, title: translate('panel.title'), children: [_jsx(TeamsXLogo, { size: 14, decorative: true }), _jsx("span", { className: css.badgeFabCount, children: sessionTeams.length }), workingCount > 0 && _jsx("span", { className: css.badgeFabBusy, "data-busy": true, children: workingCount })] }));
+    if (!expanded)
+        return badge;
+    return (_jsxs(_Fragment, { children: [badge, createPortal(_jsxs("div", { className: css.panelWindow, ref: panelRef, style: { top: `${placement.top}px`, right: `${placement.right}px` }, role: 'region', "aria-label": translate('panel.aria'), children: [_jsxs("header", { className: css.panelHeader, children: [_jsxs("h2", { className: css.panelTitle, children: [_jsx(TeamsXLogo, { size: 18, decorative: true }), " ", translate('panel.title')] }), _jsxs("div", { className: css.panelActions, children: [_jsx("button", { type: 'button', className: css.refreshButton, onClick: reload, "data-loading": loading === true || undefined, "aria-label": translate('panel.refresh'), title: translate('panel.refresh'), children: _jsx("span", { className: loading === true ? css.animSpin : undefined, children: "\u27F3" }) }), _jsx("button", { type: 'button', className: css.refreshButton, onClick: () => { setExpanded(false); }, "aria-label": translate('panel.close'), title: translate('panel.close'), children: "\u2715" })] })] }), error !== undefined && _jsx("p", { className: css.panelError, children: translate('panel.error', { message: error }) }), error === undefined && sessionTeams.length === 0 && (_jsx("p", { className: css.panelEmpty, children: translate('panel.empty') })), _jsx("div", { className: css.teamList, children: sessionTeams.map((team) => _jsx(TeamCard, { team: team, t: translate }, `${team.workspace}/${team.teamId}`)) })] }), document.body)] }));
 }

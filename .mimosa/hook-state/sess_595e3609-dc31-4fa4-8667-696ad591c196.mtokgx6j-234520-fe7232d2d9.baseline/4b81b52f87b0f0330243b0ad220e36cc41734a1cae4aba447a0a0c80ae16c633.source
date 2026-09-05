@@ -11,6 +11,7 @@ export declare const zh: {
     'panel.title': string;
     'panel.empty': string;
     'panel.refresh': string;
+    'panel.close': string;
     'panel.live': string;
     'panel.archived': string;
     'panel.error': string;

@@ -31,6 +31,7 @@ import {
   type StagedPlanMutation,
   type ToolsConfig,
 } from './tools.ts'
+import { interruptMember } from './members.ts'
 import { WEB_SERVER_KEYS, WORKSPACE_KEYS } from './compat.ts'
 import { installKnownEventTypes } from './events.ts'
 import { join } from 'node:path'
@@ -223,6 +224,72 @@ export function apply(ctx: Context, config: Config): void {
         }
       },
     }), 'teams-x: halt route')
+
+    // Per-member pause: interrupt one working member's current turn. The
+    // member's open attempt stays parked (the scheduler parks it on the idle
+    // edge), so the captain can resume it with guidance later — the same
+    // semantic as asking the captain to pause a member in chat.
+    ctx.effect(() => webServer.register({
+      kind: 'exact',
+      path: '/plugins/dsh-teams-x/member/pause',
+      handler: async (req, res) => {
+        if (req.method !== 'POST') {
+          res.writeHead(405, { allow: 'POST', 'cache-control': 'no-store' })
+          res.end()
+          return
+        }
+        let payload: { sessionId?: unknown; teamId?: unknown; memberName?: unknown }
+        try {
+          const chunks: Buffer[] = []
+          const raw = await new Promise<string>((resolve, reject) => {
+            req.on('data', (chunk) => { chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)) })
+            req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+            req.on('error', reject)
+          })
+          payload = raw.trim() === '' ? {} : JSON.parse(raw) as typeof payload
+        } catch {
+          res.writeHead(400, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+          res.end(JSON.stringify({ error: 'invalid request body' }))
+          return
+        }
+        const sessionId = typeof payload.sessionId === 'string' ? payload.sessionId.trim() : ''
+        const teamId = typeof payload.teamId === 'string' ? payload.teamId.trim() : ''
+        const memberName = typeof payload.memberName === 'string' ? payload.memberName.trim() : ''
+        if (sessionId === '' || teamId === '' || memberName === '') {
+          res.writeHead(400, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+          res.end(JSON.stringify({ error: 'sessionId, teamId, and memberName are required' }))
+          return
+        }
+        const captain = ctx.agents.get(sessionId as SessionId)
+        if (captain === undefined) {
+          res.writeHead(409, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+          res.end(JSON.stringify({ error: 'captain session is not attached' }))
+          return
+        }
+        const stateRoot = join(captain.session.header.cwd ?? process.cwd(), resolved.stateDir)
+        const team = await findTeamByCaptain(stateRoot, captain.id)
+        if (team === undefined || team.id !== teamId) {
+          res.writeHead(404, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+          res.end(JSON.stringify({ error: 'team not found for this captain' }))
+          return
+        }
+        const member = team.members.find((candidate) => candidate.name === memberName && candidate.status !== 'removed')
+        if (member === undefined || member.id === '') {
+          res.writeHead(404, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+          res.end(JSON.stringify({ error: `no active member "${memberName}"` }))
+          return
+        }
+        try {
+          interruptMember(ctx, captain, member.id)
+          res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+          res.end(JSON.stringify({ ok: true, memberName, note: 'interrupt requested; the open attempt stays parked' }))
+        } catch (error: unknown) {
+          ctx.logger.warn(`teams-x: pause failed for ${memberName}: ${String(error)}`)
+          res.writeHead(500, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+          res.end(JSON.stringify({ error: 'failed to pause the member' }))
+        }
+      },
+    }), 'teams-x: member pause route')
   }
 
   registerWebSurface()

@@ -8,7 +8,7 @@ window.__ModuleLoader__.load({
 		let react = require("react");
 		let react_dom = require("react-dom");
 		//#region \0teamsx-css:/home/xiaoxin/dsh-teams-x/src/client/ActivityPanel.module.css.mjs
-		const css = ".ccAtPW_panel{color:var(--dsw-alias-label-primary,#f9fafb);flex-direction:column;gap:10px;padding:12px;font-size:13px;display:flex;overflow-y:auto}.ccAtPW_badgeFab{border:1px solid var(--dsw-alias-border-l2,#3c3c3d);background:var(--dsw-alias-bg-layer-2,#2c2c2e);height:26px;color:var(--dsw-alias-state-business-primary,#679efe);cursor:pointer;border-radius:999px;align-items:center;gap:6px;padding:0 10px;font-size:12px;transition:border-color .12s,background .12s;display:inline-flex}.ccAtPW_badgeFab:hover{border-color:var(--dsw-alias-state-business-primary,#679efe);transform:translateY(-1px)}.ccAtPW_badgeFabCount{color:var(--dsw-alias-label-primary,#f9fafb);font-weight:600}.ccAtPW_badgeFabBusy{background:var(--dsw-alias-state-business-primary,#679efe);min-width:16px;height:16px;color:var(--dsw-alias-label-primary-foreground,#0f1115);border-radius:999px;justify-content:center;align-items:center;padding:0 4px;font-size:10px;animation:1.6s ease-in-out infinite ccAtPW_teamsx-pulse;display:inline-flex}.ccAtPW_panelWindow{border:1px solid var(--dsw-alias-border-l2,#3c3c3d);background:var(--dsw-alias-bg-layer-1,#232324);width:400px;max-width:calc(100vw - 32px);max-height:min(72vh,640px);box-shadow:0 8px 28px var(--dsw-alias-bg-mask-drop,#272730b3);color:var(--dsw-alias-label-primary,#f9fafb);border-radius:12px;flex-direction:column;gap:10px;padding:12px;font-size:13px;animation:.14s ccAtPW_teamsx-enter;display:flex;position:fixed;overflow-y:auto}@keyframes ccAtPW_teamsx-enter{0%{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}.ccAtPW_panelHeader{justify-content:space-between;align-items:center;gap:8px;display:flex}.ccAtPW_panelTitle{align-items:center;gap:8px;margin:0;font-size:14px;font-weight:600;display:flex}.ccAtPW_refreshButton{border:1px solid var(--dsw-alias-border-l2,#3c3c3d);color:var(--dsw-alias-label-secondary,#a8adb4);cursor:pointer;background:0 0;border-radius:6px;width:26px;height:26px}.ccAtPW_refreshButton:hover{background:var(--dsw-alias-interactive-bg-hover,#ffffff14)}.ccAtPW_panelEmpty{color:var(--dsw-alias-label-tertiary,#7d828a);text-align:center;padding:18px 8px}.ccAtPW_panelError{color:var(--dsw-alias-state-error-primary,#f25a5a);padding:8px}.ccAtPW_teamList{flex-direction:column;gap:12px;display:flex}.ccAtPW_teamCard{border:1px solid var(--dsw-alias-border-l2,#3c3c3d);background:var(--dsw-alias-bg-layer-2,#2c2c2e);border-radius:10px;flex-direction:column;gap:8px;padding:10px;display:flex}.ccAtPW_teamCard[data-halted]{opacity:.75}.ccAtPW_teamHeader{flex-wrap:wrap;align-items:flex-start;gap:8px;display:flex}.ccAtPW_teamLogo{color:var(--dsw-alias-state-business-primary,#679efe);flex-shrink:0;margin-top:2px}.ccAtPW_teamTitleBlock{flex:auto;min-width:0}.ccAtPW_teamName{margin:0;font-size:13px;font-weight:600}.ccAtPW_teamGoal{color:var(--dsw-alias-label-secondary,#a8adb4);-webkit-line-clamp:2;-webkit-box-orient:vertical;margin:2px 0 0;display:-webkit-box;overflow:hidden}.ccAtPW_teamBadges{flex-wrap:wrap;align-items:center;gap:6px;display:flex}.ccAtPW_badge,.ccAtPW_badgeMuted,.ccAtPW_badgeWarn{white-space:nowrap;border-radius:999px;padding:1px 8px;font-size:11px}.ccAtPW_badge{background:var(--dsw-alias-interactive-bg-active,#ffffff24);color:var(--dsw-alias-state-business-primary,#679efe)}.ccAtPW_badgeMuted{background:var(--dsw-alias-interactive-bg-hover,#ffffff14);color:var(--dsw-alias-label-secondary,#a8adb4)}.ccAtPW_badgeWarn{background:var(--dsw-alias-state-warn-tertiary,#27241f);color:var(--dsw-alias-state-warn-label,#dd8629)}.ccAtPW_stopButton{border:1px solid var(--dsw-alias-state-error-primary,#f25a5a);color:var(--dsw-alias-state-error-primary,#f25a5a);cursor:pointer;background:0 0;border-radius:6px;align-self:center;padding:2px 10px;font-size:12px}.ccAtPW_stopButton:hover{background:var(--dsw-alias-interactive-bg-hover-danger,#f25a5a26)}.ccAtPW_stopConfirmBox{border:1px solid var(--dsw-alias-state-error-primary,#f25a5a);border-radius:8px;flex-direction:column;gap:6px;padding:8px 10px;display:flex}.ccAtPW_stopConfirmBox p{margin:0}.ccAtPW_stopError{color:var(--dsw-alias-state-error-primary,#f25a5a)}.ccAtPW_stopActions{justify-content:flex-end;gap:8px;display:flex}.ccAtPW_stopCancel,.ccAtPW_stopConfirm{cursor:pointer;border-radius:6px;padding:2px 10px;font-size:12px}.ccAtPW_stopCancel{border:1px solid var(--dsw-alias-border-l2,#3c3c3d);color:inherit;background:0 0}.ccAtPW_stopConfirm{background:var(--dsw-alias-state-error-primary,#f25a5a);color:var(--dsw-alias-label-primary-foreground,#0f1115);border:none}.ccAtPW_roster{flex-direction:column;gap:2px;display:flex}.ccAtPW_memberRow{border-radius:6px;grid-template-columns:22px minmax(72px,1.2fr) minmax(0,1.6fr) auto auto minmax(96px,auto);align-items:center;gap:6px;padding:3px 4px;display:grid}.ccAtPW_memberRow[data-activity=working]{background:var(--dsw-alias-interactive-bg-hover,#ffffff14)}.ccAtPW_memberIcon{color:var(--dsw-alias-state-business-primary,#679efe);display:inline-flex}.ccAtPW_memberName{text-overflow:ellipsis;white-space:nowrap;font-weight:600;overflow:hidden}.ccAtPW_memberMeta{color:var(--dsw-alias-label-tertiary,#7d828a);text-overflow:ellipsis;white-space:nowrap;font-size:11px;overflow:hidden}.ccAtPW_memberProgress{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary,#a8adb4);font-size:11px}.ccAtPW_memberUnread{background:var(--dsw-alias-state-error-primary,#f25a5a);color:var(--dsw-alias-label-primary-foreground,#0f1115);border-radius:999px;justify-content:center;align-items:center;min-width:16px;height:16px;padding:0 4px;font-size:10px;display:inline-flex}.ccAtPW_memberState{color:var(--dsw-alias-label-secondary,#a8adb4);align-items:center;gap:4px;font-size:11px;display:inline-flex}.ccAtPW_dag{flex-direction:column;gap:2px;display:flex}.ccAtPW_taskRow{border:1px solid #0000;border-radius:6px;grid-template-columns:18px 34px minmax(0,1fr) auto auto;align-items:center;gap:6px;padding:3px 4px;display:grid}.ccAtPW_taskRow[data-state=running]{border-color:var(--dsw-alias-state-business-primary,#679efe)}.ccAtPW_taskRow[data-state=failed]{background:var(--dsw-alias-interactive-bg-hover-danger,#f25a5a26)}.ccAtPW_taskIcon{display:inline-flex}.ccAtPW_taskRow[data-state=completed] .ccAtPW_taskIcon{color:var(--dsw-alias-state-success-primary,#22c55e)}.ccAtPW_taskRow[data-state=failed] .ccAtPW_taskIcon{color:var(--dsw-alias-state-error-primary,#f25a5a)}.ccAtPW_taskRow[data-state=running] .ccAtPW_taskIcon{color:var(--dsw-alias-state-business-primary,#679efe)}.ccAtPW_taskRow[data-state=blocked] .ccAtPW_taskIcon{color:var(--dsw-alias-state-warn-primary,#f59e0b)}.ccAtPW_taskId{font-family:var(--dsw-font-family,inherit);color:var(--dsw-alias-label-tertiary,#7d828a);letter-spacing:.02em;font-size:11px}.ccAtPW_taskSubject{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.ccAtPW_taskAssignee{color:var(--dsw-alias-label-secondary,#a8adb4);font-size:11px}.ccAtPW_taskStatus{white-space:nowrap;font-size:11px}.ccAtPW_inbox{border-top:1px dashed var(--dsw-alias-border-l2,#3c3c3d);padding-top:6px}.ccAtPW_inboxTitle{text-transform:uppercase;letter-spacing:.04em;color:var(--dsw-alias-label-tertiary,#7d828a);margin:0 0 4px;font-size:11px;font-weight:600}.ccAtPW_inboxEmpty{color:var(--dsw-alias-label-tertiary,#7d828a);margin:0;font-size:12px}.ccAtPW_inboxList{flex-direction:column;gap:4px;margin:0;padding:0;list-style:none;display:flex}.ccAtPW_inboxItem{gap:6px;font-size:12px;display:flex}.ccAtPW_inboxFrom{flex-shrink:0;font-weight:600}.ccAtPW_inboxContent{color:var(--dsw-alias-label-secondary,#a8adb4);-webkit-line-clamp:2;-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden}.ccAtPW_animPulse{transform-origin:50%;animation:1.6s ease-in-out infinite ccAtPW_teamsx-pulse}@keyframes ccAtPW_teamsx-pulse{0%,to{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(.92)}}.ccAtPW_animSpin{animation:1.2s linear infinite ccAtPW_teamsx-spin;display:inline-block}@keyframes ccAtPW_teamsx-spin{to{transform:rotate(360deg)}}";
+		const css = ".ccAtPW_panel{color:var(--dsw-alias-label-primary,#f9fafb);flex-direction:column;gap:10px;padding:12px;font-size:13px;display:flex;overflow-y:auto}.ccAtPW_badgeFab{border:1px solid var(--dsw-alias-border-l2,#3c3c3d);background:var(--dsw-alias-bg-layer-2,#2c2c2e);height:26px;color:var(--dsw-alias-state-business-primary,#679efe);cursor:pointer;border-radius:999px;align-items:center;gap:6px;padding:0 10px;font-size:12px;transition:border-color .12s,background .12s;display:inline-flex}.ccAtPW_badgeFab:hover{border-color:var(--dsw-alias-state-business-primary,#679efe)}.ccAtPW_badgeFab[data-expanded]{border-color:var(--dsw-alias-state-business-primary,#679efe);background:var(--dsw-alias-interactive-bg-active,#ffffff24)}.ccAtPW_badgeFabCount{color:var(--dsw-alias-label-primary,#f9fafb);font-weight:600}.ccAtPW_badgeFabBusy{background:var(--dsw-alias-state-business-primary,#679efe);min-width:16px;height:16px;color:var(--dsw-alias-label-primary-foreground,#0f1115);border-radius:999px;justify-content:center;align-items:center;padding:0 4px;font-size:10px;animation:1.6s ease-in-out infinite ccAtPW_teamsx-pulse;display:inline-flex}.ccAtPW_panelWindow{border:1px solid var(--dsw-alias-border-l2,#3c3c3d);background:var(--dsw-alias-bg-layer-1,#232324);width:400px;max-width:calc(100vw - 32px);max-height:min(72vh,640px);box-shadow:0 8px 28px var(--dsw-alias-bg-mask-drop,#272730b3);color:var(--dsw-alias-label-primary,#f9fafb);border-radius:12px;flex-direction:column;gap:10px;padding:12px;font-size:13px;animation:.14s ccAtPW_teamsx-enter;display:flex;position:fixed;overflow-y:auto}@keyframes ccAtPW_teamsx-enter{0%{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}.ccAtPW_panelHeader{justify-content:space-between;align-items:center;gap:8px;display:flex}.ccAtPW_panelTitle{align-items:center;gap:8px;margin:0;font-size:14px;font-weight:600;display:flex}.ccAtPW_panelActions{align-items:center;gap:2px;display:inline-flex}.ccAtPW_refreshButton{color:var(--dsw-alias-label-secondary,#a8adb4);cursor:pointer;background:0 0;border:none;border-radius:6px;justify-content:center;align-items:center;width:24px;height:24px;font-size:13px;display:inline-flex}.ccAtPW_refreshButton:hover{background:var(--dsw-alias-interactive-bg-hover,#ffffff14);color:var(--dsw-alias-label-primary,#f9fafb)}.ccAtPW_panelEmpty{color:var(--dsw-alias-label-tertiary,#7d828a);text-align:center;padding:18px 8px}.ccAtPW_panelError{color:var(--dsw-alias-state-error-primary,#f25a5a);padding:8px}.ccAtPW_teamList{flex-direction:column;gap:12px;display:flex}.ccAtPW_teamCard{border:1px solid var(--dsw-alias-border-l2,#3c3c3d);background:var(--dsw-alias-bg-layer-2,#2c2c2e);border-radius:10px;flex-direction:column;gap:8px;padding:10px;display:flex}.ccAtPW_teamCard[data-halted]{opacity:.75}.ccAtPW_teamHeader{flex-wrap:wrap;align-items:flex-start;gap:8px;display:flex}.ccAtPW_teamLogo{color:var(--dsw-alias-state-business-primary,#679efe);flex-shrink:0;margin-top:2px}.ccAtPW_teamTitleBlock{flex:auto;min-width:0}.ccAtPW_teamName{margin:0;font-size:13px;font-weight:600}.ccAtPW_teamGoal{color:var(--dsw-alias-label-secondary,#a8adb4);-webkit-line-clamp:2;-webkit-box-orient:vertical;margin:2px 0 0;display:-webkit-box;overflow:hidden}.ccAtPW_teamBadges{flex-wrap:wrap;align-items:center;gap:6px;display:flex}.ccAtPW_badge,.ccAtPW_badgeMuted,.ccAtPW_badgeWarn{white-space:nowrap;border-radius:999px;padding:1px 8px;font-size:11px}.ccAtPW_badge{background:var(--dsw-alias-interactive-bg-active,#ffffff24);color:var(--dsw-alias-state-business-primary,#679efe)}.ccAtPW_badgeMuted{background:var(--dsw-alias-interactive-bg-hover,#ffffff14);color:var(--dsw-alias-label-secondary,#a8adb4)}.ccAtPW_badgeWarn{background:var(--dsw-alias-state-warn-tertiary,#27241f);color:var(--dsw-alias-state-warn-label,#dd8629)}.ccAtPW_stopButton{border:1px solid var(--dsw-alias-state-error-primary,#f25a5a);color:var(--dsw-alias-state-error-primary,#f25a5a);cursor:pointer;background:0 0;border-radius:6px;align-self:center;padding:2px 10px;font-size:12px}.ccAtPW_stopButton:hover{background:var(--dsw-alias-interactive-bg-hover-danger,#f25a5a26)}.ccAtPW_stopConfirmBox{border:1px solid var(--dsw-alias-state-error-primary,#f25a5a);border-radius:8px;flex-direction:column;gap:6px;padding:8px 10px;display:flex}.ccAtPW_stopConfirmBox p{margin:0}.ccAtPW_stopError{color:var(--dsw-alias-state-error-primary,#f25a5a)}.ccAtPW_stopActions{justify-content:flex-end;gap:8px;display:flex}.ccAtPW_stopCancel,.ccAtPW_stopConfirm{cursor:pointer;border-radius:6px;padding:2px 10px;font-size:12px}.ccAtPW_stopCancel{border:1px solid var(--dsw-alias-border-l2,#3c3c3d);color:inherit;background:0 0}.ccAtPW_stopConfirm{background:var(--dsw-alias-state-error-primary,#f25a5a);color:var(--dsw-alias-label-primary-foreground,#0f1115);border:none}.ccAtPW_roster{flex-direction:column;gap:2px;display:flex}.ccAtPW_memberRow{border-radius:6px;grid-template-columns:22px minmax(72px,1.2fr) minmax(0,1.6fr) auto auto minmax(96px,auto);align-items:center;gap:6px;padding:3px 4px;display:grid}.ccAtPW_memberRow[data-activity=working]{background:var(--dsw-alias-interactive-bg-hover,#ffffff14)}.ccAtPW_memberIcon{color:var(--dsw-alias-state-business-primary,#679efe);display:inline-flex}.ccAtPW_memberName{text-overflow:ellipsis;white-space:nowrap;font-weight:600;overflow:hidden}.ccAtPW_memberMeta{color:var(--dsw-alias-label-tertiary,#7d828a);text-overflow:ellipsis;white-space:nowrap;font-size:11px;overflow:hidden}.ccAtPW_memberProgress{font-variant-numeric:tabular-nums;color:var(--dsw-alias-label-secondary,#a8adb4);font-size:11px}.ccAtPW_memberUnread{background:var(--dsw-alias-state-error-primary,#f25a5a);color:var(--dsw-alias-label-primary-foreground,#0f1115);border-radius:999px;justify-content:center;align-items:center;min-width:16px;height:16px;padding:0 4px;font-size:10px;display:inline-flex}.ccAtPW_memberState{color:var(--dsw-alias-label-secondary,#a8adb4);align-items:center;gap:4px;font-size:11px;display:inline-flex}.ccAtPW_dag{flex-direction:column;gap:2px;display:flex}.ccAtPW_taskRow{border:1px solid #0000;border-radius:6px;grid-template-columns:18px 34px minmax(0,1fr) auto auto;align-items:center;gap:6px;padding:3px 4px;display:grid}.ccAtPW_taskRow[data-state=running]{border-color:var(--dsw-alias-state-business-primary,#679efe)}.ccAtPW_taskRow[data-state=failed]{background:var(--dsw-alias-interactive-bg-hover-danger,#f25a5a26)}.ccAtPW_taskIcon{display:inline-flex}.ccAtPW_taskRow[data-state=completed] .ccAtPW_taskIcon{color:var(--dsw-alias-state-success-primary,#22c55e)}.ccAtPW_taskRow[data-state=failed] .ccAtPW_taskIcon{color:var(--dsw-alias-state-error-primary,#f25a5a)}.ccAtPW_taskRow[data-state=running] .ccAtPW_taskIcon{color:var(--dsw-alias-state-business-primary,#679efe)}.ccAtPW_taskRow[data-state=blocked] .ccAtPW_taskIcon{color:var(--dsw-alias-state-warn-primary,#f59e0b)}.ccAtPW_taskId{font-family:var(--dsw-font-family,inherit);color:var(--dsw-alias-label-tertiary,#7d828a);letter-spacing:.02em;font-size:11px}.ccAtPW_taskSubject{text-overflow:ellipsis;white-space:nowrap;overflow:hidden}.ccAtPW_taskAssignee{color:var(--dsw-alias-label-secondary,#a8adb4);font-size:11px}.ccAtPW_taskStatus{white-space:nowrap;font-size:11px}.ccAtPW_inbox{border-top:1px dashed var(--dsw-alias-border-l2,#3c3c3d);padding-top:6px}.ccAtPW_inboxTitle{text-transform:uppercase;letter-spacing:.04em;color:var(--dsw-alias-label-tertiary,#7d828a);margin:0 0 4px;font-size:11px;font-weight:600}.ccAtPW_inboxEmpty{color:var(--dsw-alias-label-tertiary,#7d828a);margin:0;font-size:12px}.ccAtPW_inboxList{flex-direction:column;gap:4px;margin:0;padding:0;list-style:none;display:flex}.ccAtPW_inboxItem{gap:6px;font-size:12px;display:flex}.ccAtPW_inboxFrom{flex-shrink:0;font-weight:600}.ccAtPW_inboxContent{color:var(--dsw-alias-label-secondary,#a8adb4);-webkit-line-clamp:2;-webkit-box-orient:vertical;display:-webkit-box;overflow:hidden}.ccAtPW_animPulse{transform-origin:50%;animation:1.6s ease-in-out infinite ccAtPW_teamsx-pulse}@keyframes ccAtPW_teamsx-pulse{0%,to{opacity:1;transform:scale(1)}50%{opacity:.55;transform:scale(.92)}}.ccAtPW_animSpin{animation:1.2s linear infinite ccAtPW_teamsx-spin;display:inline-block}@keyframes ccAtPW_teamsx-spin{to{transform:rotate(360deg)}}";
 		const tagId = "dsh-teams-x/ActivityPanel.module.css";
 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId) + "]") === null) {
 			const tag = document.createElement("style");
@@ -42,6 +42,7 @@ window.__ModuleLoader__.load({
 			"memberState": "ccAtPW_memberState",
 			"memberUnread": "ccAtPW_memberUnread",
 			"panel": "ccAtPW_panel",
+			"panelActions": "ccAtPW_panelActions",
 			"panelEmpty": "ccAtPW_panelEmpty",
 			"panelError": "ccAtPW_panelError",
 			"panelHeader": "ccAtPW_panelHeader",
@@ -355,10 +356,12 @@ window.__ModuleLoader__.load({
 		function useTeamSnapshots(expanded) {
 			const [teams, setTeams] = (0, react.useState)([]);
 			const [error, setError] = (0, react.useState)(void 0);
+			const [loading, setLoading] = (0, react.useState)(false);
 			const [tick, setTick] = (0, react.useState)(0);
 			(0, react.useEffect)(() => {
 				let disposed = false;
 				const load = async () => {
+					setLoading(true);
 					try {
 						const response = await fetch(TEAMSX_STATE_URL, { headers: { accept: "application/json" } });
 						if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -369,6 +372,8 @@ window.__ModuleLoader__.load({
 						}
 					} catch (cause) {
 						if (!disposed) setError(cause instanceof Error ? cause.message : String(cause));
+					} finally {
+						if (!disposed) setLoading(false);
 					}
 				};
 				load();
@@ -384,6 +389,7 @@ window.__ModuleLoader__.load({
 			return {
 				teams,
 				error,
+				loading,
 				reload: () => setTick((value) => value + 1)
 			};
 		}
@@ -719,39 +725,54 @@ window.__ModuleLoader__.load({
 			const [expanded, setExpanded] = (0, react.useState)(false);
 			const badgeRef = (0, react.useRef)(null);
 			const panelRef = (0, react.useRef)(null);
-			const { teams, error, reload } = useTeamSnapshots(expanded);
+			const { teams, error, loading, reload } = useTeamSnapshots(expanded);
 			const sessionTeams = (0, react.useMemo)(() => teams.filter((team) => team.captainSessionId === sessionId || team.members.some((member) => member.id === sessionId)), [teams, sessionId]);
 			const workingCount = sessionTeams.reduce((count, team) => count + team.members.filter((member) => member.activity === "working").length, 0);
 			const placement = usePanelPlacement(badgeRef, panelRef, expanded);
-			if (!expanded) {
-				if (sessionTeams.length === 0 && error === void 0) return null;
-				return (0, react_jsx_runtime.jsxs)("button", {
-					type: "button",
-					ref: badgeRef,
-					className: ActivityPanel_module_css_default.badgeFab,
-					onClick: () => {
-						setExpanded(true);
-					},
-					"aria-label": translate("panel.aria"),
-					title: translate("panel.title"),
-					children: [
-						(0, react_jsx_runtime.jsx)(TeamsXLogo, {
-							size: 14,
-							decorative: true
-						}),
-						(0, react_jsx_runtime.jsx)("span", {
-							className: ActivityPanel_module_css_default.badgeFabCount,
-							children: sessionTeams.length
-						}),
-						workingCount > 0 && (0, react_jsx_runtime.jsx)("span", {
-							className: ActivityPanel_module_css_default.badgeFabBusy,
-							"data-busy": true,
-							children: workingCount
-						})
-					]
-				});
-			}
-			return (0, react_dom.createPortal)((0, react_jsx_runtime.jsxs)("div", {
+			(0, react.useEffect)(() => {
+				if (!expanded) return;
+				const onPointerDown = (event) => {
+					const target = event.target;
+					if (target === null) return;
+					if (panelRef.current?.contains(target) === true) return;
+					if (badgeRef.current?.contains(target) === true) return;
+					setExpanded(false);
+				};
+				document.addEventListener("pointerdown", onPointerDown);
+				return () => {
+					document.removeEventListener("pointerdown", onPointerDown);
+				};
+			}, [expanded]);
+			if (sessionTeams.length === 0 && error === void 0) return null;
+			const badge = (0, react_jsx_runtime.jsxs)("button", {
+				type: "button",
+				ref: badgeRef,
+				className: ActivityPanel_module_css_default.badgeFab,
+				"data-expanded": expanded === true || void 0,
+				onClick: () => {
+					setExpanded((value) => !value);
+				},
+				"aria-label": translate("panel.aria"),
+				"aria-expanded": expanded === true || void 0,
+				title: translate("panel.title"),
+				children: [
+					(0, react_jsx_runtime.jsx)(TeamsXLogo, {
+						size: 14,
+						decorative: true
+					}),
+					(0, react_jsx_runtime.jsx)("span", {
+						className: ActivityPanel_module_css_default.badgeFabCount,
+						children: sessionTeams.length
+					}),
+					workingCount > 0 && (0, react_jsx_runtime.jsx)("span", {
+						className: ActivityPanel_module_css_default.badgeFabBusy,
+						"data-busy": true,
+						children: workingCount
+					})
+				]
+			});
+			if (!expanded) return badge;
+			return (0, react_jsx_runtime.jsxs)(react_jsx_runtime.Fragment, { children: [badge, (0, react_dom.createPortal)((0, react_jsx_runtime.jsxs)("div", {
 				className: ActivityPanel_module_css_default.panelWindow,
 				ref: panelRef,
 				style: {
@@ -763,38 +784,40 @@ window.__ModuleLoader__.load({
 				children: [
 					(0, react_jsx_runtime.jsxs)("header", {
 						className: ActivityPanel_module_css_default.panelHeader,
-						children: [
-							(0, react_jsx_runtime.jsxs)("h2", {
-								className: ActivityPanel_module_css_default.panelTitle,
-								children: [
-									(0, react_jsx_runtime.jsx)(TeamsXLogo, {
-										size: 18,
-										decorative: true
-									}),
-									" ",
-									translate("panel.title")
-								]
-							}),
-							(0, react_jsx_runtime.jsx)("button", {
+						children: [(0, react_jsx_runtime.jsxs)("h2", {
+							className: ActivityPanel_module_css_default.panelTitle,
+							children: [
+								(0, react_jsx_runtime.jsx)(TeamsXLogo, {
+									size: 18,
+									decorative: true
+								}),
+								" ",
+								translate("panel.title")
+							]
+						}), (0, react_jsx_runtime.jsxs)("div", {
+							className: ActivityPanel_module_css_default.panelActions,
+							children: [(0, react_jsx_runtime.jsx)("button", {
 								type: "button",
 								className: ActivityPanel_module_css_default.refreshButton,
 								onClick: reload,
+								"data-loading": loading === true || void 0,
 								"aria-label": translate("panel.refresh"),
+								title: translate("panel.refresh"),
 								children: (0, react_jsx_runtime.jsx)("span", {
-									className: ActivityPanel_module_css_default.animSpin,
+									className: loading === true ? ActivityPanel_module_css_default.animSpin : void 0,
 									children: "⟳"
 								})
-							}),
-							(0, react_jsx_runtime.jsx)("button", {
+							}), (0, react_jsx_runtime.jsx)("button", {
 								type: "button",
 								className: ActivityPanel_module_css_default.refreshButton,
 								onClick: () => {
 									setExpanded(false);
 								},
-								"aria-label": translate("panel.refresh"),
+								"aria-label": translate("panel.close"),
+								title: translate("panel.close"),
 								children: "✕"
-							})
-						]
+							})]
+						})]
 					}),
 					error !== void 0 && (0, react_jsx_runtime.jsx)("p", {
 						className: ActivityPanel_module_css_default.panelError,
@@ -812,7 +835,7 @@ window.__ModuleLoader__.load({
 						}, `${team.workspace}/${team.teamId}`))
 					})
 				]
-			}), document.body);
+			}), document.body)] });
 		}
 		//#endregion
 		//#region lib/client/locales.js
@@ -829,6 +852,7 @@ window.__ModuleLoader__.load({
 			"panel.title": "TeamsX 团队活动",
 			"panel.empty": "暂无团队活动 — 在会话中说\"用 TeamsX 做 X\"即可组建团队",
 			"panel.refresh": "刷新",
+			"panel.close": "关闭面板",
 			"panel.live": "实时",
 			"panel.archived": "历史",
 			"panel.error": "加载团队状态失败：{message}",
@@ -897,6 +921,7 @@ window.__ModuleLoader__.load({
 			"panel.title": "TeamsX team activity",
 			"panel.empty": "No team activity yet — say \"use TeamsX to do X\" in a session to assemble a team",
 			"panel.refresh": "Refresh",
+			"panel.close": "Close panel",
 			"panel.live": "Live",
 			"panel.archived": "Archive",
 			"panel.error": "Failed to load team state: {message}",
