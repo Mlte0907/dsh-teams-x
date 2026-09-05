@@ -11,11 +11,14 @@
 }
 
 /* Collapsed floating badge: the only thing this plugin mounts into the
-   full-screen shell.overlay layer while closed. Small, corner-pinned. */
+   full-screen shell.overlay layer while closed. Preferred position is
+   top-right (the reference implementation's spot); the runtime shifts it
+   left via inline `right` when a higher-layer panel (better-sidebar's dock)
+   covers it — see useAvoidCover. */
 .badgeFab {
   position: absolute;
-  right: 16px;
-  bottom: 16px;
+  top: 64px;
+  right: 18px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -54,11 +57,12 @@
   animation: teamsx-pulse 1.6s ease-in-out infinite;
 }
 
-/* Expanded panel window: fixed-size floating card, never full-screen. */
+/* Expanded panel window: fixed-size floating card, never full-screen.
+   Anchored under the badge; shifted left together with it by useAvoidCover. */
 .panelWindow {
   position: absolute;
-  right: 16px;
-  bottom: 16px;
+  top: 104px;
+  right: 18px;
   width: 400px;
   max-width: calc(100vw - 32px);
   max-height: min(72vh, 640px);

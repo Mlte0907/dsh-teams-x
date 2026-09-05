@@ -38,8 +38,10 @@ export declare function withTeamLock<T>(key: string, fn: () => Promise<T>): Prom
  */
 export declare function sanitizeKey(name: string): string;
 /**
- * Describe the first structural reason a team record failed validation, for
- * error messages. Best-effort: returns a short human-readable cause.
+ * Describe the first reason a (raw, pre-coercion) team record would fail
+ * validation, walking every isTeamState check in order. Best-effort and
+ * verbose by design: an unusable durable record must never masquerade as a
+ * generic failure.
  */
 export declare function describeTeamStateError(value: unknown, expectedId: string): string;
 /**

@@ -8,7 +8,7 @@
  * @module dsh-teams-x/client/ActivityPanel
  */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactElement } from 'react'
 import css from './ActivityPanel.module.css'
 import {
@@ -51,6 +51,48 @@ function format(template: string, params: Record<string, string | number> | unde
 /** Wrap the harness translate function with interpolation. */
 function makeT(t: PanelTranslate): (key: TeamsXLocaleKey, params?: Record<string, string | number>) => string {
   return (key, params) => format(t(key, params), params)
+}
+
+/**
+ * Shift the floating surface left until nothing paints above it. Third-party
+ * overlay panels (e.g. better-sidebar's right dock) live in higher stacking
+ * layers than shell.overlay, so no z-index inside the overlay can win — the
+ * only robust fix is measured avoidance. Probes elementFromPoint at the
+ * surface's center and walks candidate `right` offsets; re-probes on resize
+ * and on an interval so a closed panel returns the surface to its preferred
+ * spot.
+ */
+function useAvoidCover(surfaceRef: React.RefObject<HTMLElement | null>): number {
+  const [shift, setShift] = useState(18)
+  useEffect(() => {
+    const PREFERRED = 18
+    const CANDIDATES = [18, 60, 120, 200, 300, 420, 520]
+    const probe = (): void => {
+      const el = surfaceRef.current
+      if (el === null) return
+      for (const candidate of CANDIDATES) {
+        el.style.right = `${candidate}px`
+        const rect = el.getBoundingClientRect()
+        if (rect.width === 0) return
+        const top = document.elementFromPoint(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
+        )
+        if (top === null || el === top || el.contains(top)) {
+          setShift(candidate)
+          return
+        }
+      }
+    }
+    probe()
+    const timer = window.setInterval(probe, 1500)
+    window.addEventListener('resize', probe)
+    return () => {
+      window.clearInterval(timer)
+      window.removeEventListener('resize', probe)
+    }
+  }, [surfaceRef])
+  return shift
 }
 
 /** Poll the state endpoint: once on mount, then on an interval ONLY while expanded. */
@@ -241,6 +283,11 @@ export function ActivityPanel({ t }: ActivityPanelProps): ReactElement | null {
   // Collapsed by default: the shell.overlay layer covers the whole app, so
   // this component must occupy nothing until the user opens it.
   const [expanded, setExpanded] = useState(false)
+  // A single shared surface ref feeds useAvoidCover; the callback ref is the
+  // boundary between the generic probe and the concrete button/div elements.
+  const surfaceRef = useRef<HTMLElement | null>(null)
+  const setSurface = (el: HTMLElement | null): void => { surfaceRef.current = el }
+  const shift = useAvoidCover(surfaceRef)
   const { teams, error, reload } = useTeamSnapshots(expanded)
   const activeTeams = teams.filter((team) => team.halted !== true)
   const workingCount = activeTeams.reduce((count, team) => (
@@ -253,7 +300,9 @@ export function ActivityPanel({ t }: ActivityPanelProps): ReactElement | null {
     return (
       <button
         type='button'
+        ref={setSurface}
         className={css.badgeFab}
+        style={{ right: `${shift}px` }}
         onClick={() => { setExpanded(true) }}
         aria-label={translate('panel.aria')}
         title={translate('panel.title')}
@@ -266,7 +315,13 @@ export function ActivityPanel({ t }: ActivityPanelProps): ReactElement | null {
   }
 
   return (
-    <div className={css.panelWindow} role='region' aria-label={translate('panel.aria')}>
+    <div
+      className={css.panelWindow}
+      ref={setSurface}
+      style={{ right: `${shift}px` }}
+      role='region'
+      aria-label={translate('panel.aria')}
+    >
       <header className={css.panelHeader}>
         <h2 className={css.panelTitle}><TeamsXLogo size={18} /> {translate('panel.title')}</h2>
         <button type='button' className={css.refreshButton} onClick={reload} aria-label={translate('panel.refresh')}>

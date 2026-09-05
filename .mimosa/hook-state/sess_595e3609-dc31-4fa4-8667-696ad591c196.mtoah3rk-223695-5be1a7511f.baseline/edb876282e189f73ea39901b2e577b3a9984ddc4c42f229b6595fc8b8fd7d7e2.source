@@ -321,7 +321,11 @@ function coerceTeamState(value, expectedId) {
             if (typeof cleaned[key] === 'string' && cleaned[key].trim() === '')
                 delete cleaned[key];
         }
-        for (const listKey of ['inScope', 'outOfScope', 'acceptance', 'verify', 'dependencies']) {
+        // Only OPTIONAL list fields may collapse to omitted. `dependencies` is a
+        // required structural field (isTeamTask enforces the array): dropping it
+        // here would brick every team whose task has no prerequisites — the exact
+        // failure mode the reference implementation avoids by never touching it.
+        for (const listKey of ['inScope', 'outOfScope', 'acceptance', 'verify']) {
             const list = cleaned[listKey];
             if (Array.isArray(list)) {
                 const filtered = list.filter((item) => typeof item === 'string' && item.trim() !== '');
@@ -331,6 +335,11 @@ function coerceTeamState(value, expectedId) {
                     cleaned[listKey] = filtered;
             }
         }
+        // Required structure: dependencies always materializes as a string array.
+        const dependencies = cleaned['dependencies'];
+        cleaned['dependencies'] = Array.isArray(dependencies)
+            ? dependencies.filter((item) => typeof item === 'string')
+            : [];
         return cleaned;
     });
     const coerced = { ...value, tasks };
@@ -346,18 +355,24 @@ function coerceTeamState(value, expectedId) {
     return isTeamState(coerced, expectedId) ? coerced : undefined;
 }
 /**
- * Describe the first structural reason a team record failed validation, for
- * error messages. Best-effort: returns a short human-readable cause.
+ * Describe the first reason a (raw, pre-coercion) team record would fail
+ * validation, walking every isTeamState check in order. Best-effort and
+ * verbose by design: an unusable durable record must never masquerade as a
+ * generic failure.
  */
 export function describeTeamStateError(value, expectedId) {
     if (!isRecord(value))
         return 'team.json is not a JSON object';
     if (value['id'] !== expectedId)
-        return `id "${String(value['id'])}" does not match directory "${expectedId}"`;
+        return `id ${JSON.stringify(value['id'])} does not match directory "${expectedId}"`;
     if (typeof value['name'] !== 'string' || value['name'].trim() === '')
         return 'name must be a non-empty string';
+    if (!isOptionalString(value['description']))
+        return 'description must be a string when present';
     if (typeof value['captainSessionId'] !== 'string' || value['captainSessionId'] === '')
         return 'captainSessionId must be a non-empty string';
+    if (!isFiniteNumber(value['createdAt']))
+        return 'createdAt must be a finite number';
     if (!Array.isArray(value['members']))
         return 'members must be an array';
     const members = value['members'];
@@ -370,9 +385,48 @@ export function describeTeamStateError(value, expectedId) {
     const badTask = tasks.findIndex((task) => !isTeamTask(task));
     if (badTask >= 0)
         return `tasks[${badTask}] is not a valid task record (needs id/subject/status/dependencies/createdAt/updatedAt)`;
-    if (!Number.isSafeInteger(value['taskSeq']))
-        return 'taskSeq must be a safe integer';
-    return 'unknown structural violation';
+    if (!Number.isSafeInteger(value['taskSeq']) || value['taskSeq'] < 0)
+        return 'taskSeq must be a non-negative safe integer';
+    if (value['phase'] !== undefined && value['phase'] !== 'staged' && value['phase'] !== 'running') {
+        return `phase ${JSON.stringify(value['phase'])} is unrecognized (expected "staged" or "running")`;
+    }
+    if (value['planReviewState'] !== undefined
+        && value['planReviewState'] !== 'awaiting_review'
+        && value['planReviewState'] !== 'awaiting_feedback') {
+        return `planReviewState ${JSON.stringify(value['planReviewState'])} is unrecognized (expected "awaiting_review" or "awaiting_feedback")`;
+    }
+    if (value['approvedAt'] !== undefined && !isFiniteNumber(value['approvedAt']))
+        return 'approvedAt must be a finite number';
+    if (value['halted'] !== undefined && typeof value['halted'] !== 'boolean')
+        return 'halted must be a boolean';
+    if (value['haltedAt'] !== undefined && !isFiniteNumber(value['haltedAt']))
+        return 'haltedAt must be a finite number';
+    const staged = value['phase'] === 'staged';
+    const memberKeys = new Set();
+    const memberIds = new Set();
+    for (const [index, member] of value['members'].entries()) {
+        const key = sanitizeKey(member.name);
+        if (!staged && member.id === '')
+            return `members[${index}] has an empty id on a non-staged team`;
+        if (key === CAPTAIN_KEY)
+            return `members[${index}] name collides with the reserved captain key`;
+        if (memberKeys.has(key))
+            return `members[${index}] name "${member.name}" collides with an earlier member`;
+        if (member.id !== '' && memberIds.has(member.id))
+            return `members[${index}] id collides with an earlier member`;
+        memberKeys.add(key);
+        if (member.id !== '')
+            memberIds.add(member.id);
+    }
+    const taskIds = new Set();
+    for (const [index, task] of value['tasks'].entries()) {
+        if (task.id === '')
+            return `tasks[${index}] has an empty id`;
+        if (taskIds.has(task.id))
+            return `tasks[${index}] id "${task.id}" collides with an earlier task`;
+        taskIds.add(task.id);
+    }
+    return 'no rule identified the failure (post-coercion state still rejected — file a bug)';
 }
 /**
  * Scan the state root and report each team's loadability. Used to enrich

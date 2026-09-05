@@ -133,14 +133,19 @@ function nonemptyStringList(value: unknown): value is string[] {
   return Array.isArray(value) && value.length > 0 && value.every(nonemptyString)
 }
 
-/** Normalize model-materialized blank optional fields (`""` → omitted). */
+/**
+ * Normalize model-materialized blank optional fields (`""` → omitted).
+ * `dependencies` is deliberately NOT touched: it is a required structural
+ * field the call sites default to `[]`, and dropping it here would leak into
+ * the durable state and brick reloads (same class as the reference's #105).
+ */
 export function normalizeBlankOptionalTaskFields<T extends Record<string, unknown>>(input: T): T {
   const next = { ...input }
   for (const key of Object.keys(next)) {
     const value = next[key]
     if (typeof value === 'string' && value.trim() === '') delete next[key]
   }
-  for (const listKey of ['inScope', 'outOfScope', 'acceptance', 'verify', 'dependencies'] as const) {
+  for (const listKey of ['inScope', 'outOfScope', 'acceptance', 'verify'] as const) {
     const value = next[listKey]
     if (Array.isArray(value)) {
       const cleaned = value.filter((item) => typeof item === 'string' && item.trim() !== '')
