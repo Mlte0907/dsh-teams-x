@@ -72,8 +72,23 @@ function makeT(t: PanelTranslate): (key: TeamsXLocaleKey, params?: Record<string
   return (key, params) => format(t(key, params), params)
 }
 
-/** Poll the state endpoint: once on mount, then on an interval ONLY while expanded. */
-function useTeamSnapshots(expanded: boolean): {
+/** Fetch the state endpoint (live or archived). */
+async function fetchTeams(viewMode: 'live' | 'archive'): Promise<TeamActivitySnapshot[]> {
+  const url = viewMode === 'archive'
+    ? `${TEAMSX_STATE_URL}?archived=1`
+    : TEAMSX_STATE_URL
+  const response = await fetch(url, { headers: { accept: 'application/json' } })
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  const body = await response.json() as StateResponse
+  return body.teams
+}
+
+/**
+ * Fetch team snapshots. `live` mode polls (slow cadence when collapsed,
+ * fast when expanded); `archive` mode fetches once on mount and on
+ * explicit reload only (static historical data, no auto-refresh).
+ */
+function useTeamData(expanded: boolean, viewMode: 'live' | 'archive'): {
   teams: TeamActivitySnapshot[]
   error?: string
   loading: boolean
@@ -89,11 +104,9 @@ function useTeamSnapshots(expanded: boolean): {
     const load = async (): Promise<void> => {
       setLoading(true)
       try {
-        const response = await fetch(TEAMSX_STATE_URL, { headers: { accept: 'application/json' } })
-        if (!response.ok) throw new Error(`HTTP ${response.status}`)
-        const body = await response.json() as StateResponse
+        const data = await fetchTeams(viewMode)
         if (!disposed) {
-          setTeams(body.teams)
+          setTeams(data)
           setError(undefined)
         }
       } catch (cause: unknown) {
@@ -103,15 +116,17 @@ function useTeamSnapshots(expanded: boolean): {
       }
     }
     void load()
-    // Collapsed keeps a slow discovery cadence (a team may be created after
-    // mount); expanded polls at the live cadence.
+    if (viewMode === 'archive') {
+      // Static historical data — fetch once, then only on explicit reload.
+      return () => { disposed = true }
+    }
     const interval = expanded ? POLL_INTERVAL_MS : DISCOVERY_INTERVAL_MS
     const timer = window.setInterval(() => { void load() }, interval)
     return () => {
       disposed = true
       window.clearInterval(timer)
     }
-  }, [expanded, tick])
+  }, [expanded, viewMode, tick])
 
   return { teams, error, loading, reload: () => setTick((value) => value + 1) }
 }
@@ -123,8 +138,8 @@ function useTeamSnapshots(expanded: boolean): {
  * horizontal probe still dodges a higher-layer dock that would cover it.
  */
 function usePanelPlacement(
-  badgeRef: RefObject<HTMLButtonElement | null>,
-  panelRef: RefObject<HTMLDivElement | null>,
+  badgeRef: RefObject<HTMLElement | null>,
+  panelRef: RefObject<HTMLElement | null>,
   expanded: boolean,
 ): { top: number; right: number } {
   const [pos, setPos] = useState({ top: 96, right: 18 })
@@ -199,11 +214,12 @@ async function pauseMember(captainSessionId: string, teamId: string, memberName:
 }
 
 /** One member row of the roster. */
-function MemberRow({ member, team, t, openMember }: {
+function MemberRow({ member, team, t, openMember, readOnly }: {
   member: TeamActivitySnapshot['members'][number]
   team: TeamActivitySnapshot
   t: ReturnType<typeof makeT>
   openMember: ActivityPanelProps['openMember']
+  readOnly?: boolean
 }): ReactElement {
   const [pausing, setPausing] = useState(false)
   const [pauseError, setPauseError] = useState<string | undefined>(undefined)
@@ -264,7 +280,7 @@ function MemberRow({ member, team, t, openMember }: {
       <span className={css.memberState}>
         {ActivityIcon !== undefined && <ActivityIcon size={14} className={member.activity === 'working' ? css.animPulse : undefined} decorative />}
         {t(stateKey)}
-        {member.activity === 'working' && (
+        {!readOnly && member.activity === 'working' && (
           <button
             type='button'
             className={css.memberPause}
@@ -379,10 +395,11 @@ function PlanReviewBar({ team, t }: { team: TeamActivitySnapshot; t: ReturnType<
 }
 
 /** One team card: header, roster, DAG, inbox preview, and stop control. */
-function TeamCard({ team, t, openMember }: {
+function TeamCard({ team, t, openMember, readOnly }: {
   team: TeamActivitySnapshot
   t: ReturnType<typeof makeT>
   openMember: ActivityPanelProps['openMember']
+  readOnly?: boolean
 }): ReactElement {
   const [confirming, setConfirming] = useState(false)
   const [stopping, setStopping] = useState(false)
@@ -404,7 +421,7 @@ function TeamCard({ team, t, openMember }: {
 
   return (
     <section className={css.teamCard} data-phase={team.phase} data-halted={team.halted === true || undefined}>
-      {team.phase === 'staged' && <PlanReviewBar team={team} t={t} />}
+      {team.phase === 'staged' && !readOnly && <PlanReviewBar team={team} t={t} />}
       <header className={css.teamHeader}>
         <TeamsXLogo size={20} className={css.teamLogo} decorative />
         <div className={css.teamTitleBlock}>
@@ -420,7 +437,7 @@ function TeamCard({ team, t, openMember }: {
           <span className={css.badgeMuted}>{t('team.members', { count: team.members.length })}</span>
           <span className={css.badgeMuted}>{t('team.done', { done, total: team.tasks.length })}</span>
         </div>
-        {team.phase === 'running' && team.halted !== true && !confirming && (
+        {!readOnly && team.phase === 'running' && team.halted !== true && !confirming && (
           <button type='button' className={css.stopButton} onClick={() => { setConfirming(true) }}>
             {t('team.stop')}
           </button>
@@ -476,9 +493,23 @@ function TeamCard({ team, t, openMember }: {
 export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps): ReactElement | null {
   const translate = useMemo(() => makeT(t), [t])
   const [expanded, setExpanded] = useState(false)
+  const [viewMode, setViewMode] = useState<'live' | 'archive'>('live')
+  const [hasArchived, setHasArchived] = useState(false)
   const badgeRef = useRef<HTMLButtonElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
-  const { teams, error, loading, reload } = useTeamSnapshots(expanded)
+  const { teams, error, loading, reload } = useTeamData(expanded, viewMode)
+  // One-shot: if archived teams exist for this session, show the badge
+  // even when no live teams exist — the user can browse archive history.
+  useEffect(() => {
+    if (hasArchived) return
+    void fetchTeams('archive').then((data) => {
+      const matches = data.some((team) => (
+        team.captainSessionId === sessionId
+        || team.members.some((member) => member.id === sessionId)
+      ))
+      if (matches) setHasArchived(true)
+    }).catch(() => {})
+  }, [sessionId, hasArchived])
   // Session scoping: only teams led (or joined as a member) by the session
   // whose header hosts this badge are visible here. Other sessions' teams,
   // and sessions that never used TeamsX, render nothing.
@@ -506,9 +537,10 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
     return () => { document.removeEventListener('pointerdown', onPointerDown) }
   }, [expanded])
 
-  // No teams in this session (and no fetch error): render nothing — the
-  // header shows no TeamsX control at all.
-  if (sessionTeams.length === 0 && error === undefined) return null
+  // No teams in this session and no archived history: render nothing — the
+  // header shows no TeamsX control at all. If archived teams exist, show the
+  // badge so the user can browse history.
+  if (sessionTeams.length === 0 && !hasArchived && error === undefined) return null
 
   // The badge STAYS mounted while expanded (it is the anchor the panel
   // positions under, and the outside-click toggle target); the expanded
@@ -551,8 +583,26 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
         >
           <header className={css.panelHeader}>
             <h2 className={css.panelTitle}><TeamsXLogo size={18} decorative /> {translate('panel.title')}</h2>
-            <div className={css.panelActions}>
-              <button
+        <div className={css.panelActions}>
+          <div className={css.modeToggle} role='radiogroup' aria-label={translate('panel.live')}>
+            <button
+              type='button'
+              className={`${css.modeOption} ${viewMode === 'live' ? css.modeActive : ''}`}
+              onClick={() => { setViewMode('live') }}
+              aria-pressed={viewMode === 'live'}
+            >
+              {translate('panel.live')}
+            </button>
+            <button
+              type='button'
+              className={`${css.modeOption} ${viewMode === 'archive' ? css.modeActive : ''}`}
+              onClick={() => { setViewMode('archive') }}
+              aria-pressed={viewMode === 'archive'}
+            >
+              {translate('panel.archived')}
+            </button>
+          </div>
+          <button
                 type='button'
                 className={css.refreshButton}
                 onClick={reload}
@@ -578,7 +628,7 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
             <p className={css.panelEmpty}>{translate('panel.empty')}</p>
           )}
           <div className={css.teamList}>
-            {sessionTeams.map((team) => <TeamCard key={`${team.workspace}/${team.teamId}`} team={team} t={translate} openMember={openMember} />)}
+            {sessionTeams.map((team) => <TeamCard key={`${team.workspace}/${team.teamId}`} team={team} t={translate} openMember={openMember} readOnly={viewMode === 'archive'} />)}
           </div>
         </div>,
         document.body,

@@ -111,7 +111,44 @@
 .panelActions {
   display: inline-flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
+}
+
+/* Segmented Live/Archive mode toggle. */
+.modeToggle {
+  display: inline-flex;
+  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
+  border-radius: 6px;
+  overflow: hidden;
+  font-size: 11px;
+}
+
+.modeOption {
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #a8adb4);
+  padding: 2px 8px;
+  cursor: pointer;
+  transition: background 100ms ease, color 100ms ease;
+}
+
+.modeOption:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+}
+
+.modeActive {
+  background: var(--dsw-alias-state-business-primary, #679efe);
+  color: var(--dsw-alias-label-primary-foreground, #0f1115);
+}
+
+/* Read-only archived team cards. */
+.teamCard[data-archived] {
+  opacity: 0.85;
+}
+
+.teamCard[data-archived] .stopButton,
+.teamCard[data-archived] .memberPause {
+  display: none;
 }
 
 .refreshButton {
