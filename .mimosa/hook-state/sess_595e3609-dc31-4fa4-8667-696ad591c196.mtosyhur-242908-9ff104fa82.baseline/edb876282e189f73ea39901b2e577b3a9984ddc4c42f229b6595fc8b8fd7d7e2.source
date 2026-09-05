@@ -574,6 +574,37 @@ async function scanForParticipant(stateRoot, agentSessionId) {
     return found;
 }
 /**
+ * Authoritative scan: return EVERY team in the state root the session
+ * participates in (captain or member), bypassing the reverse index. The
+ * index is a cache and can drift (crash, restart, hand edit) — invariant
+ * checks like "one active team per captain" must never trust it.
+ */
+export async function listTeamsForParticipant(stateRoot, agentSessionId) {
+    let entries;
+    try {
+        entries = await readdir(stateRoot, { withFileTypes: true });
+    }
+    catch (error) {
+        if (error instanceof Error && 'code' in error && error.code === 'ENOENT') {
+            return [];
+        }
+        throw error;
+    }
+    const matches = [];
+    for (const entry of entries) {
+        if (!entry.isDirectory() || entry.name === 'archive')
+            continue;
+        const team = await readTeam(stateRoot, entry.name).catch(() => undefined);
+        if (team === undefined)
+            continue;
+        const participates = team.captainSessionId === agentSessionId
+            || team.members.some((member) => member.id === agentSessionId && member.status !== 'removed');
+        if (participates)
+            matches.push(team);
+    }
+    return matches;
+}
+/**
  * Find the team in which one session is an active participant, via the
  * reverse index with a self-healing full-scan fallback.
  * @param stateRoot - resolved absolute state root directory.

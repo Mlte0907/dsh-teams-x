@@ -539,7 +539,13 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
         <div
           className={css.panelWindow}
           ref={panelRef}
-          style={{ top: `${placement.top}px`, right: `${placement.right}px` }}
+          style={{
+            top: `${placement.top}px`,
+            right: `${placement.right}px`,
+            // Viewport clamp: on narrow screens (mobile remote view) a large
+            // right offset must never push the panel past the left edge.
+            maxWidth: `${Math.max(280, window.innerWidth - placement.right - 16)}px`,
+          }}
           role='region'
           aria-label={translate('panel.aria')}
         >
