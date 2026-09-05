@@ -1,0 +1,21 @@
+# dsh-teams-x bundle patch: mounts the TeamsX plugin into the host composition
+# of a dsh profile. The plugin registers its `teamsx_*` tools into the shared
+# `tools` registry and one usage section into the global system prompt, so any
+# session of the profile can drive a multi-agent team through natural language.
+#
+# Install: `dsh plugin --profile <name> add /path/to/dsh-teams-x` (local path
+# or npm). The `dsh plugin` command pnpm-installs the package into the profile
+# and reconciles it into the profile's `dsh.profile.bundles` layer list.
+#
+# Tool namespace is `teamsx_*` and the state dir is `.teams-x`, so this plugin
+# can coexist with the original agent-teams plugin for comparison.
+- insert:
+    - id: teams-x
+      # Node-resolvable package name — must stay in sync with package.json `name`.
+      name: dsh-teams-x
+      config:
+        # Team state lives under `<session workspace>/<stateDir>/<teamId>/`
+        # (team.json + index files + inbox/*.jsonl mailboxes).
+        stateDir: .teams-x
+        # Provider used to spawn member subagents ('spawn' or 'fork').
+        memberProvider: spawn
