@@ -1,4 +1,7 @@
-/* TeamsX activity panel styles (CSS Modules; compiled inline by tsdown). */
+/* TeamsX activity panel styles (CSS Modules; compiled inline by tsdown).
+   All colors ride the harness design tokens (--dsw-alias-*) so every surface
+   follows the active light/dark theme automatically; literals are fallbacks
+   only, kept close to the dark-theme values observed in the running host. */
 
 .panel {
   display: flex;
@@ -7,7 +10,7 @@
   overflow-y: auto;
   padding: 12px;
   font-size: 13px;
-  color: var(--dsh-text, #1f2328);
+  color: var(--dsw-alias-label-primary, #f9fafb);
 }
 
 /* Collapsed floating badge: the only thing this plugin mounts into the
@@ -24,22 +27,24 @@
   gap: 6px;
   padding: 6px 10px;
   border-radius: 999px;
-  border: 1px solid var(--dsh-border, #d0d7de);
-  background: var(--dsh-bg, #ffffff);
-  color: var(--dsh-accent, #5b4cf0);
+  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
+  background: var(--dsw-alias-bg-layer-1, #232324);
+  color: var(--dsw-alias-state-business-primary, #679efe);
   font-size: 12px;
   cursor: pointer;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+  box-shadow: 0 2px 8px var(--dsw-alias-bg-mask-3, rgba(0, 0, 0, 0.48));
   width: fit-content;
   height: fit-content;
+  transition: border-color 120ms ease, transform 120ms ease;
 }
 
 .badgeFab:hover {
-  border-color: var(--dsh-accent, #5b4cf0);
+  border-color: var(--dsw-alias-state-business-primary, #679efe);
+  transform: translateY(-1px);
 }
 
 .badgeFabCount {
-  color: var(--dsh-text, #1f2328);
+  color: var(--dsw-alias-label-primary, #f9fafb);
   font-weight: 600;
 }
 
@@ -48,8 +53,8 @@
   height: 16px;
   padding: 0 4px;
   border-radius: 999px;
-  background: var(--dsh-accent, #5b4cf0);
-  color: #fff;
+  background: var(--dsw-alias-state-business-primary, #679efe);
+  color: var(--dsw-alias-label-primary-foreground, #0f1115);
   font-size: 10px;
   display: inline-flex;
   align-items: center;
@@ -71,12 +76,18 @@
   flex-direction: column;
   gap: 10px;
   padding: 12px;
-  border: 1px solid var(--dsh-border, #d0d7de);
+  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
   border-radius: 12px;
-  background: var(--dsh-bg, #ffffff);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
+  background: var(--dsw-alias-bg-layer-1, #232324);
+  box-shadow: 0 8px 28px var(--dsw-alias-bg-mask-drop, rgba(39, 39, 48, 0.7));
   font-size: 13px;
-  color: var(--dsh-text, #1f2328);
+  color: var(--dsw-alias-label-primary, #f9fafb);
+  animation: teamsx-enter 140ms ease;
+}
+
+@keyframes teamsx-enter {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .panelHeader {
@@ -96,9 +107,9 @@
 }
 
 .refreshButton {
-  border: 1px solid var(--dsh-border, #d0d7de);
+  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
   background: transparent;
-  color: inherit;
+  color: var(--dsw-alias-label-secondary, #a8adb4);
   border-radius: 6px;
   width: 26px;
   height: 26px;
@@ -106,17 +117,17 @@
 }
 
 .refreshButton:hover {
-  background: var(--dsh-hover, rgba(125, 125, 125, 0.12));
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
 }
 
 .panelEmpty {
-  color: var(--dsh-text-muted, #656d76);
+  color: var(--dsw-alias-label-tertiary, #7d828a);
   padding: 18px 8px;
   text-align: center;
 }
 
 .panelError {
-  color: #cf222e;
+  color: var(--dsw-alias-state-error-primary, #f25a5a);
   padding: 8px;
 }
 
@@ -127,13 +138,13 @@
 }
 
 .teamCard {
-  border: 1px solid var(--dsh-border, #d0d7de);
+  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
   border-radius: 10px;
   padding: 10px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: var(--dsh-bg, #ffffff);
+  background: var(--dsw-alias-bg-layer-2, #2c2c2e);
 }
 
 .teamCard[data-halted] {
@@ -148,7 +159,7 @@
 }
 
 .teamLogo {
-  color: var(--dsh-accent, #5b4cf0);
+  color: var(--dsw-alias-state-business-primary, #679efe);
   flex-shrink: 0;
   margin-top: 2px;
 }
@@ -166,7 +177,7 @@
 
 .teamGoal {
   margin: 2px 0 0;
-  color: var(--dsh-text-muted, #656d76);
+  color: var(--dsw-alias-label-secondary, #a8adb4);
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -190,24 +201,24 @@
 }
 
 .badge {
-  background: color-mix(in srgb, var(--dsh-accent, #5b4cf0) 14%, transparent);
-  color: var(--dsh-accent, #5b4cf0);
+  background: var(--dsw-alias-interactive-bg-active, rgba(255, 255, 255, 0.14));
+  color: var(--dsw-alias-state-business-primary, #679efe);
 }
 
 .badgeMuted {
-  background: var(--dsh-hover, rgba(125, 125, 125, 0.12));
-  color: var(--dsh-text-muted, #656d76);
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--dsw-alias-label-secondary, #a8adb4);
 }
 
 .badgeWarn {
-  background: color-mix(in srgb, #d4a72c 22%, transparent);
-  color: #9a6700;
+  background: var(--dsw-alias-state-warn-tertiary, #27241f);
+  color: var(--dsw-alias-state-warn-label, #dd8629);
 }
 
 .stopButton {
   align-self: center;
-  border: 1px solid color-mix(in srgb, #cf222e 40%, transparent);
-  color: #cf222e;
+  border: 1px solid var(--dsw-alias-state-error-primary, #f25a5a);
+  color: var(--dsw-alias-state-error-primary, #f25a5a);
   background: transparent;
   border-radius: 6px;
   padding: 2px 10px;
@@ -216,11 +227,11 @@
 }
 
 .stopButton:hover {
-  background: color-mix(in srgb, #cf222e 10%, transparent);
+  background: var(--dsw-alias-interactive-bg-hover-danger, rgba(242, 90, 90, 0.15));
 }
 
 .stopConfirmBox {
-  border: 1px solid color-mix(in srgb, #cf222e 35%, transparent);
+  border: 1px solid var(--dsw-alias-state-error-primary, #f25a5a);
   border-radius: 8px;
   padding: 8px 10px;
   display: flex;
@@ -233,7 +244,7 @@
 }
 
 .stopError {
-  color: #cf222e;
+  color: var(--dsw-alias-state-error-primary, #f25a5a);
 }
 
 .stopActions {
@@ -251,15 +262,15 @@
 }
 
 .stopCancel {
-  border: 1px solid var(--dsh-border, #d0d7de);
+  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
   background: transparent;
   color: inherit;
 }
 
 .stopConfirm {
   border: none;
-  background: #cf222e;
-  color: #fff;
+  background: var(--dsw-alias-state-error-primary, #f25a5a);
+  color: var(--dsw-alias-label-primary-foreground, #0f1115);
 }
 
 .roster {
@@ -278,12 +289,12 @@
 }
 
 .memberRow[data-activity='working'] {
-  background: color-mix(in srgb, var(--dsh-accent, #5b4cf0) 7%, transparent);
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
 }
 
 .memberIcon {
   display: inline-flex;
-  color: var(--dsh-accent, #5b4cf0);
+  color: var(--dsw-alias-state-business-primary, #679efe);
 }
 
 .memberName {
@@ -294,7 +305,7 @@
 }
 
 .memberMeta {
-  color: var(--dsh-text-muted, #656d76);
+  color: var(--dsw-alias-label-tertiary, #7d828a);
   font-size: 11px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -304,12 +315,12 @@
 .memberProgress {
   font-variant-numeric: tabular-nums;
   font-size: 11px;
-  color: var(--dsh-text-muted, #656d76);
+  color: var(--dsw-alias-label-secondary, #a8adb4);
 }
 
 .memberUnread {
-  background: #cf222e;
-  color: #fff;
+  background: var(--dsw-alias-state-error-primary, #f25a5a);
+  color: var(--dsw-alias-label-primary-foreground, #0f1115);
   border-radius: 999px;
   font-size: 10px;
   min-width: 16px;
@@ -325,7 +336,7 @@
   align-items: center;
   gap: 4px;
   font-size: 11px;
-  color: var(--dsh-text-muted, #656d76);
+  color: var(--dsw-alias-label-secondary, #a8adb4);
 }
 
 .dag {
@@ -345,26 +356,27 @@
 }
 
 .taskRow[data-state='running'] {
-  border-color: color-mix(in srgb, var(--dsh-accent, #5b4cf0) 35%, transparent);
+  border-color: var(--dsw-alias-state-business-primary, #679efe);
 }
 
 .taskRow[data-state='failed'] {
-  background: color-mix(in srgb, #cf222e 8%, transparent);
+  background: var(--dsw-alias-interactive-bg-hover-danger, rgba(242, 90, 90, 0.15));
 }
 
 .taskIcon {
   display: inline-flex;
 }
 
-.taskRow[data-state='completed'] .taskIcon { color: #1a7f37; }
-.taskRow[data-state='failed'] .taskIcon { color: #cf222e; }
-.taskRow[data-state='running'] .taskIcon { color: var(--dsh-accent, #5b4cf0); }
-.taskRow[data-state='blocked'] .taskIcon { color: #9a6700; }
+.taskRow[data-state='completed'] .taskIcon { color: var(--dsw-alias-state-success-primary, #22c55e); }
+.taskRow[data-state='failed'] .taskIcon { color: var(--dsw-alias-state-error-primary, #f25a5a); }
+.taskRow[data-state='running'] .taskIcon { color: var(--dsw-alias-state-business-primary, #679efe); }
+.taskRow[data-state='blocked'] .taskIcon { color: var(--dsw-alias-state-warn-primary, #f59e0b); }
 
 .taskId {
-  font-family: var(--dsh-mono, ui-monospace, monospace);
+  font-family: var(--dsw-font-family, inherit);
   font-size: 11px;
-  color: var(--dsh-text-muted, #656d76);
+  color: var(--dsw-alias-label-tertiary, #7d828a);
+  letter-spacing: 0.02em;
 }
 
 .taskSubject {
@@ -375,7 +387,7 @@
 
 .taskAssignee {
   font-size: 11px;
-  color: var(--dsh-text-muted, #656d76);
+  color: var(--dsw-alias-label-secondary, #a8adb4);
 }
 
 .taskStatus {
@@ -384,7 +396,7 @@
 }
 
 .inbox {
-  border-top: 1px dashed var(--dsh-border, #d0d7de);
+  border-top: 1px dashed var(--dsw-alias-border-l2, #3c3c3d);
   padding-top: 6px;
 }
 
@@ -394,12 +406,12 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--dsh-text-muted, #656d76);
+  color: var(--dsw-alias-label-tertiary, #7d828a);
 }
 
 .inboxEmpty {
   margin: 0;
-  color: var(--dsh-text-muted, #656d76);
+  color: var(--dsw-alias-label-tertiary, #7d828a);
   font-size: 12px;
 }
 
@@ -424,7 +436,7 @@
 }
 
 .inboxContent {
-  color: var(--dsh-text-muted, #656d76);
+  color: var(--dsw-alias-label-secondary, #a8adb4);
   overflow: hidden;
   display: -webkit-box;
   -webkit-line-clamp: 2;
