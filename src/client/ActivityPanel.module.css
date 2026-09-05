@@ -33,7 +33,11 @@
 
 .badgeFab:hover {
   border-color: var(--dsw-alias-state-business-primary, #679efe);
-  transform: translateY(-1px);
+}
+
+.badgeFab[data-expanded] {
+  border-color: var(--dsw-alias-state-business-primary, #679efe);
+  background: var(--dsw-alias-interactive-bg-active, rgba(255, 255, 255, 0.14));
 }
 
 .badgeFabCount {
@@ -97,18 +101,30 @@
   font-weight: 600;
 }
 
+/* Title-right action group: refresh + close as compact ghost icons. */
+.panelActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
 .refreshButton {
-  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
+  border: none;
   background: transparent;
   color: var(--dsw-alias-label-secondary, #a8adb4);
   border-radius: 6px;
-  width: 26px;
-  height: 26px;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
   cursor: pointer;
 }
 
 .refreshButton:hover {
   background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--dsw-alias-label-primary, #f9fafb);
 }
 
 .panelEmpty {

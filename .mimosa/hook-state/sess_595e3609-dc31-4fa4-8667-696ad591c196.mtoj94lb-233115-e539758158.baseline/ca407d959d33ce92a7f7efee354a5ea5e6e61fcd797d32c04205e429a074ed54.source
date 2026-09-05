@@ -339,6 +339,9 @@ window.__ModuleLoader__.load({
 		const TEAMSX_HALT_URL = "/plugins/dsh-teams-x/halt";
 		/** Poll cadence for the live view. */
 		const POLL_INTERVAL_MS = 4e3;
+		/** Collapsed discovery cadence: slow, but fast enough to notice a team the
+		* session creates after this badge mounted. */
+		const DISCOVERY_INTERVAL_MS = 1e4;
 		/** Interpolate `{key}` params into a locale string. */
 		function format(template, params) {
 			if (params === void 0) return template;
@@ -354,7 +357,6 @@ window.__ModuleLoader__.load({
 			const [error, setError] = (0, react.useState)(void 0);
 			const [tick, setTick] = (0, react.useState)(0);
 			(0, react.useEffect)(() => {
-				if (!expanded && tick > 0) return;
 				let disposed = false;
 				const load = async () => {
 					try {
@@ -370,12 +372,10 @@ window.__ModuleLoader__.load({
 					}
 				};
 				load();
-				if (!expanded) return () => {
-					disposed = true;
-				};
+				const interval = expanded ? POLL_INTERVAL_MS : DISCOVERY_INTERVAL_MS;
 				const timer = window.setInterval(() => {
 					load();
-				}, POLL_INTERVAL_MS);
+				}, interval);
 				return () => {
 					disposed = true;
 					window.clearInterval(timer);

@@ -35,6 +35,9 @@ export const TEAMSX_STATE_URL = '/plugins/dsh-teams-x/state'
 export const TEAMSX_HALT_URL = '/plugins/dsh-teams-x/halt'
 /** Poll cadence for the live view. */
 export const POLL_INTERVAL_MS = 4_000
+/** Collapsed discovery cadence: slow, but fast enough to notice a team the
+ * session creates after this badge mounted. */
+export const DISCOVERY_INTERVAL_MS = 10_000
 
 /** Locale formatter supplied by the harness locale service. */
 export type PanelTranslate = (key: TeamsXLocaleKey, params?: Record<string, string | number>) => string
@@ -66,8 +69,6 @@ function useTeamSnapshots(expanded: boolean): { teams: TeamActivitySnapshot[]; e
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
-    // Collapsed: one discovery fetch only, no recurring background activity.
-    if (!expanded && tick > 0) return
     let disposed = false
     const load = async (): Promise<void> => {
       try {
@@ -83,8 +84,10 @@ function useTeamSnapshots(expanded: boolean): { teams: TeamActivitySnapshot[]; e
       }
     }
     void load()
-    if (!expanded) return () => { disposed = true }
-    const timer = window.setInterval(() => { void load() }, POLL_INTERVAL_MS)
+    // Collapsed keeps a slow discovery cadence (a team may be created after
+    // mount); expanded polls at the live cadence.
+    const interval = expanded ? POLL_INTERVAL_MS : DISCOVERY_INTERVAL_MS
+    const timer = window.setInterval(() => { void load() }, interval)
     return () => {
       disposed = true
       window.clearInterval(timer)
