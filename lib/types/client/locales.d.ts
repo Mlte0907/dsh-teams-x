@@ -30,6 +30,13 @@ export declare const zh: {
     'team.stopDescription': string;
     'team.stopping': string;
     'team.stopFailed': string;
+    'plan.needsReview': string;
+    'plan.approve': string;
+    'plan.returnToChat': string;
+    'plan.discard': string;
+    'plan.discardConfirm': string;
+    'plan.notRunnable': string;
+    'plan.review': string;
     'format.listSeparator': string;
     'member.state.idle': string;
     'member.state.working': string;
@@ -39,6 +46,7 @@ export declare const zh: {
     'member.unread': string;
     'member.progress': string;
     'member.pause': string;
+    'member.openSession': string;
     'task.status.pending': string;
     'task.status.claimed': string;
     'task.status.in_progress': string;

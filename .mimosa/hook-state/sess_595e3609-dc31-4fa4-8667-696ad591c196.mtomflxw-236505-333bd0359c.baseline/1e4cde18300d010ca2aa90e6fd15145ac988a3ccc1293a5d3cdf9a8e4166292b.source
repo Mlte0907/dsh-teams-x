@@ -22,6 +22,8 @@ import { ACTIVITY_ICONS, ROLE_ICONS, VISUAL_STATE_ICONS, TeamsXLogo, } from "./i
 export const TEAMSX_STATE_URL = '/plugins/dsh-teams-x/state';
 /** Halt endpoint served by the host plane. */
 export const TEAMSX_HALT_URL = '/plugins/dsh-teams-x/halt';
+/** Per-member pause endpoint served by the host plane. */
+export const TEAMSX_PAUSE_URL = '/plugins/dsh-teams-x/member/pause';
 /** Poll cadence for the live view. */
 export const POLL_INTERVAL_MS = 4_000;
 /** Collapsed discovery cadence: slow, but fast enough to notice a team the
@@ -79,11 +81,10 @@ function useTeamSnapshots(expanded) {
     return { teams, error, loading, reload: () => setTick((value) => value + 1) };
 }
 /**
- * Place the expanded panel under the badge, then shift it left until nothing
- * paints above it. Third-party overlay docks (e.g. better-sidebar) live in
- * higher stacking layers than a portal can assume, so placement is measured:
- * probe elementFromPoint at the panel's header and walk candidate `right`
- * offsets; re-probe on resize/interval so a closed dock returns the panel.
+ * Place the expanded panel as a dropdown under the badge, cleared below the
+ * session tab bar. Placement runs ONCE on open (plus on resize): no periodic
+ * re-probing, so the panel never visibly jumps after settling. The one-shot
+ * horizontal probe still dodges a higher-layer dock that would cover it.
  */
 function usePanelPlacement(badgeRef, panelRef, expanded) {
     const [pos, setPos] = useState({ top: 96, right: 18 });
@@ -95,7 +96,11 @@ function usePanelPlacement(badgeRef, panelRef, expanded) {
             if (badge === null)
                 return;
             const rect = badge.getBoundingClientRect();
-            let top = rect.bottom + 6;
+            // Clear the session tab strip ("对话/轨迹/…") as the user asked: anchor
+            // under whichever is lower — the badge or the tab bar.
+            const tablist = document.querySelector('[role="tablist"]');
+            const tablistBottom = tablist === null ? 0 : tablist.getBoundingClientRect().bottom;
+            let top = Math.max(rect.bottom + 6, tablistBottom + 8, 8);
             const maxH = Math.min(window.innerHeight * 0.72, 640);
             if (top + maxH > window.innerHeight - 8) {
                 top = Math.max(8, window.innerHeight - maxH - 8);
@@ -104,6 +109,8 @@ function usePanelPlacement(badgeRef, panelRef, expanded) {
             const panel = panelRef.current;
             let right = preferred;
             if (panel !== null) {
+                // One-shot cover probe: shift left only if something would paint over
+                // the panel's header at the preferred spot.
                 const candidates = [preferred, preferred + 80, preferred + 180, preferred + 320, preferred + 480];
                 for (const candidate of candidates) {
                     panel.style.right = `${candidate}px`;
@@ -122,12 +129,8 @@ function usePanelPlacement(badgeRef, panelRef, expanded) {
             setPos((prev) => (prev.top === top && prev.right === right ? prev : { top, right }));
         };
         place();
-        const timer = window.setInterval(place, 1500);
         window.addEventListener('resize', place);
-        return () => {
-            window.clearInterval(timer);
-            window.removeEventListener('resize', place);
-        };
+        return () => { window.removeEventListener('resize', place); };
     }, [badgeRef, panelRef, expanded]);
     return pos;
 }
@@ -143,17 +146,44 @@ async function haltTeam(captainSessionId, teamId) {
         throw new Error(body.error ?? `HTTP ${response.status}`);
     }
 }
+/** POST the pause route for one member (interrupt; attempt stays parked). */
+async function pauseMember(captainSessionId, teamId, memberName) {
+    const response = await fetch(TEAMSX_PAUSE_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId: captainSessionId, teamId, memberName }),
+    });
+    if (!response.ok) {
+        const body = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+        throw new Error(body.error ?? `HTTP ${response.status}`);
+    }
+}
 /** One member row of the roster. */
-function MemberRow({ member, t }) {
+function MemberRow({ member, team, t }) {
+    const [pausing, setPausing] = useState(false);
+    const [pauseError, setPauseError] = useState(undefined);
     const roleKey = (member.role?.trim().toLowerCase() ?? '');
     const RoleIcon = ROLE_ICONS[roleKey];
     const ActivityIcon = ACTIVITY_ICONS[member.activity];
     const stateKey = (member.activity === 'working' ? 'member.state.working'
         : member.activity === 'idle' ? 'member.state.idle'
             : 'member.state.unknown');
+    const pause = async () => {
+        setPausing(true);
+        setPauseError(undefined);
+        try {
+            await pauseMember(team.captainSessionId, team.teamId, member.name);
+        }
+        catch (cause) {
+            setPauseError(cause instanceof Error ? cause.message : String(cause));
+        }
+        finally {
+            setPausing(false);
+        }
+    };
     return (_jsxs("div", { className: css.memberRow, "data-activity": member.activity, children: [_jsx("span", { className: css.memberIcon, children: RoleIcon !== undefined
                     ? _jsx(RoleIcon, { size: 18, decorative: true })
-                    : _jsx(TeamsXLogo, { size: 18, label: member.name }) }), _jsx("span", { className: css.memberName, title: member.name, children: member.name }), _jsx("span", { className: css.memberMeta, children: member.model }), _jsx("span", { className: css.memberProgress, children: t('member.progress', { done: member.done, total: member.total }) }), member.unread > 0 && (_jsx("span", { className: css.memberUnread, title: t('member.unread', { count: member.unread }), children: member.unread })), _jsxs("span", { className: css.memberState, children: [ActivityIcon !== undefined && _jsx(ActivityIcon, { size: 14, className: member.activity === 'working' ? css.animPulse : undefined, decorative: true }), t(stateKey)] })] }));
+                    : _jsx(TeamsXLogo, { size: 18, label: member.name }) }), _jsx("span", { className: css.memberName, title: member.name, children: member.name }), _jsx("span", { className: css.memberMeta, children: pauseError ?? member.model }), _jsx("span", { className: css.memberProgress, children: t('member.progress', { done: member.done, total: member.total }) }), member.unread > 0 && (_jsx("span", { className: css.memberUnread, title: t('member.unread', { count: member.unread }), children: member.unread })), _jsxs("span", { className: css.memberState, children: [ActivityIcon !== undefined && _jsx(ActivityIcon, { size: 14, className: member.activity === 'working' ? css.animPulse : undefined, decorative: true }), t(stateKey), member.activity === 'working' && (_jsx("button", { type: 'button', className: css.memberPause, onClick: () => { void pause(); }, disabled: pausing, "aria-label": t('member.pause'), title: t('member.pause'), children: pausing ? '…' : '⏸' }))] })] }));
 }
 /** One task row of the DAG list, indented by dependency depth. */
 function TaskRow({ task, t }) {
@@ -185,7 +215,7 @@ function TeamCard({ team, t }) {
             setStopping(false);
         }
     };
-    return (_jsxs("section", { className: css.teamCard, "data-phase": team.phase, "data-halted": team.halted === true || undefined, children: [_jsxs("header", { className: css.teamHeader, children: [_jsx(TeamsXLogo, { size: 20, className: css.teamLogo, decorative: true }), _jsxs("div", { className: css.teamTitleBlock, children: [_jsx("h3", { className: css.teamName, children: team.name }), team.description !== undefined && _jsx("p", { className: css.teamGoal, children: team.description })] }), _jsxs("div", { className: css.teamBadges, children: [_jsx("span", { className: css.badge, children: t(team.phase === 'staged' ? 'team.phase.staged' : 'team.phase.running') }), team.planReviewState !== undefined && (_jsx("span", { className: css.badgeMuted, children: t(`team.planReview.${team.planReviewState}`) })), team.halted === true && _jsx("span", { className: css.badgeWarn, children: t('team.halted') }), _jsx("span", { className: css.badgeMuted, children: t('team.members', { count: team.members.length }) }), _jsx("span", { className: css.badgeMuted, children: t('team.done', { done, total: team.tasks.length }) })] }), team.phase === 'running' && team.halted !== true && !confirming && (_jsx("button", { type: 'button', className: css.stopButton, onClick: () => { setConfirming(true); }, children: t('team.stop') }))] }), confirming && (_jsxs("div", { className: css.stopConfirmBox, role: 'alertdialog', "aria-label": t('team.stopTitle', { team: team.name }), children: [_jsx("p", { children: t('team.stopDescription', { tasks: team.tasks.filter((task) => task.status === 'pending' || task.status === 'claimed' || task.status === 'in_progress').length, members: team.members.filter((member) => member.activity === 'working').length }) }), stopError !== undefined && _jsx("p", { className: css.stopError, children: t('team.stopFailed', { message: stopError }) }), _jsxs("div", { className: css.stopActions, children: [_jsx("button", { type: 'button', className: css.stopCancel, onClick: () => { setConfirming(false); }, disabled: stopping, children: t('team.stopCancel') }), _jsx("button", { type: 'button', className: css.stopConfirm, onClick: () => { void stop(); }, disabled: stopping, children: stopping ? t('team.stopping') : t('team.stopConfirm') })] })] })), _jsx("div", { className: css.roster, children: team.members.map((member) => _jsx(MemberRow, { member: member, t: t }, member.id !== '' ? member.id : member.name)) }), _jsx("div", { className: css.dag, children: team.tasks.map((task) => _jsx(TaskRow, { task: task, t: t }, task.id)) }), _jsxs("footer", { className: css.inbox, children: [_jsx("h4", { className: css.inboxTitle, children: t('inbox.title') }), team.captainInbox.length === 0
+    return (_jsxs("section", { className: css.teamCard, "data-phase": team.phase, "data-halted": team.halted === true || undefined, children: [_jsxs("header", { className: css.teamHeader, children: [_jsx(TeamsXLogo, { size: 20, className: css.teamLogo, decorative: true }), _jsxs("div", { className: css.teamTitleBlock, children: [_jsx("h3", { className: css.teamName, children: team.name }), team.description !== undefined && _jsx("p", { className: css.teamGoal, children: team.description })] }), _jsxs("div", { className: css.teamBadges, children: [_jsx("span", { className: css.badge, children: t(team.phase === 'staged' ? 'team.phase.staged' : 'team.phase.running') }), team.planReviewState !== undefined && (_jsx("span", { className: css.badgeMuted, children: t(`team.planReview.${team.planReviewState}`) })), team.halted === true && _jsx("span", { className: css.badgeWarn, children: t('team.halted') }), _jsx("span", { className: css.badgeMuted, children: t('team.members', { count: team.members.length }) }), _jsx("span", { className: css.badgeMuted, children: t('team.done', { done, total: team.tasks.length }) })] }), team.phase === 'running' && team.halted !== true && !confirming && (_jsx("button", { type: 'button', className: css.stopButton, onClick: () => { setConfirming(true); }, children: t('team.stop') }))] }), confirming && (_jsxs("div", { className: css.stopConfirmBox, role: 'alertdialog', "aria-label": t('team.stopTitle', { team: team.name }), children: [_jsx("p", { children: t('team.stopDescription', { tasks: team.tasks.filter((task) => task.status === 'pending' || task.status === 'claimed' || task.status === 'in_progress').length, members: team.members.filter((member) => member.activity === 'working').length }) }), stopError !== undefined && _jsx("p", { className: css.stopError, children: t('team.stopFailed', { message: stopError }) }), _jsxs("div", { className: css.stopActions, children: [_jsx("button", { type: 'button', className: css.stopCancel, onClick: () => { setConfirming(false); }, disabled: stopping, children: t('team.stopCancel') }), _jsx("button", { type: 'button', className: css.stopConfirm, onClick: () => { void stop(); }, disabled: stopping, children: stopping ? t('team.stopping') : t('team.stopConfirm') })] })] })), _jsx("div", { className: css.roster, children: team.members.map((member) => _jsx(MemberRow, { member: member, team: team, t: t }, member.id !== '' ? member.id : member.name)) }), _jsx("div", { className: css.dag, children: team.tasks.map((task) => _jsx(TaskRow, { task: task, t: t }, task.id)) }), _jsxs("footer", { className: css.inbox, children: [_jsx("h4", { className: css.inboxTitle, children: t('inbox.title') }), team.captainInbox.length === 0
                         ? _jsx("p", { className: css.inboxEmpty, children: t('inbox.empty') })
                         : (_jsx("ul", { className: css.inboxList, children: team.captainInbox.map((message, index) => (_jsxs("li", { className: css.inboxItem, children: [_jsx("span", { className: css.inboxFrom, children: message.from }), _jsx("span", { className: css.inboxContent, children: message.content })] }, `${message.from}-${index}`))) }))] })] }));
 }

@@ -28,6 +28,7 @@ import {
 } from './icons.ts'
 import type { TeamsXLocaleKey } from './locale-keys.ts'
 import type { TeamActivitySnapshot } from '../snapshot-types.ts'
+import type { TeamsXSessionNavigator } from './session-navigation.ts'
 
 /** Panel data endpoint served by the host plane. */
 export const TEAMSX_STATE_URL = '/plugins/dsh-teams-x/state'
@@ -35,6 +36,8 @@ export const TEAMSX_STATE_URL = '/plugins/dsh-teams-x/state'
 export const TEAMSX_HALT_URL = '/plugins/dsh-teams-x/halt'
 /** Per-member pause endpoint served by the host plane. */
 export const TEAMSX_PAUSE_URL = '/plugins/dsh-teams-x/member/pause'
+/** Staged-plan review endpoint served by the host plane. */
+export const TEAMSX_PLAN_URL = '/plugins/dsh-teams-x/plan'
 /** Poll cadence for the live view. */
 export const POLL_INTERVAL_MS = 4_000
 /** Collapsed discovery cadence: slow, but fast enough to notice a team the
@@ -45,7 +48,12 @@ export const DISCOVERY_INTERVAL_MS = 10_000
 export type PanelTranslate = (key: TeamsXLocaleKey, params?: Record<string, string | number>) => string
 
 export interface ActivityPanelProps
-  extends PropsRuntime<'conversation.session.header.actions'>, PropsLocale<'teamsX'> {}
+  extends PropsRuntime<'conversation.session.header.actions'>, PropsLocale<'teamsX'> {
+  /** Client sessions service, used to open member transcripts. */
+  readonly sessions: TeamsXSessionNavigator
+  /** Open one member's transcript (wired by the plugin shell). */
+  readonly openMember: (parentId: TeamActivitySnapshot['captainSessionId'], childId: string) => void
+}
 
 interface StateResponse {
   teams: TeamActivitySnapshot[]
@@ -191,10 +199,11 @@ async function pauseMember(captainSessionId: string, teamId: string, memberName:
 }
 
 /** One member row of the roster. */
-function MemberRow({ member, team, t }: {
+function MemberRow({ member, team, t, openMember }: {
   member: TeamActivitySnapshot['members'][number]
   team: TeamActivitySnapshot
   t: ReturnType<typeof makeT>
+  openMember: ActivityPanelProps['openMember']
 }): ReactElement {
   const [pausing, setPausing] = useState(false)
   const [pauseError, setPauseError] = useState<string | undefined>(undefined)
@@ -204,6 +213,7 @@ function MemberRow({ member, team, t }: {
   const stateKey = (member.activity === 'working' ? 'member.state.working'
     : member.activity === 'idle' ? 'member.state.idle'
       : 'member.state.unknown') as TeamsXLocaleKey
+  const openable = member.id !== ''
 
   const pause = async (): Promise<void> => {
     setPausing(true)
@@ -224,9 +234,30 @@ function MemberRow({ member, team, t }: {
           ? <RoleIcon size={18} decorative />
           : <TeamsXLogo size={18} label={member.name} />}
       </span>
-      <span className={css.memberName} title={member.name}>{member.name}</span>
+      <span className={css.memberName} title={member.name}>
+        {openable ? (
+          <button
+            type='button'
+            className={css.memberLink}
+            onClick={() => { openMember(team.captainSessionId, member.id) }}
+            title={t('member.openSession')}
+          >
+            {member.name}
+          </button>
+        ) : member.name}
+      </span>
       <span className={css.memberMeta}>{pauseError ?? member.model}</span>
-      <span className={css.memberProgress}>{t('member.progress', { done: member.done, total: member.total })}</span>
+      <span className={css.memberProgress} title={t('member.progress', { done: member.done, total: member.total })}>
+        <span className={css.memberProgressBar} aria-hidden>
+          <span
+            className={css.memberProgressFill}
+            style={{ width: `${member.progress}%` }}
+            data-active={member.progress > 0 && member.progress < 100 || undefined}
+            data-done={member.progress >= 100 || undefined}
+          />
+        </span>
+        {t('member.progress', { done: member.done, total: member.total })}
+      </span>
       {member.unread > 0 && (
         <span className={css.memberUnread} title={t('member.unread', { count: member.unread })}>{member.unread}</span>
       )}
@@ -269,8 +300,90 @@ function TaskRow({ task, t }: { task: TeamActivitySnapshot['tasks'][number]; t: 
   )
 }
 
+/** POST one staged-plan review action. */
+async function planAction(
+  captainSessionId: string,
+  teamId: string,
+  action: 'approve' | 'discard' | 'continue',
+): Promise<void> {
+  const response = await fetch(TEAMSX_PLAN_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sessionId: captainSessionId, teamId, action }),
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({ error: `HTTP ${response.status}` })) as { error?: string }
+    throw new Error(body.error ?? `HTTP ${response.status}`)
+  }
+}
+
+/** The staged-plan review bar: approve, return-to-chat, and discard (2-step). */
+function PlanReviewBar({ team, t }: { team: TeamActivitySnapshot; t: ReturnType<typeof makeT> }): ReactElement {
+  const [busy, setBusy] = useState<'approve' | 'discard' | 'continue' | undefined>(undefined)
+  const [discardArmed, setDiscardArmed] = useState(false)
+  const [error, setError] = useState<string | undefined>(undefined)
+  const runnable = team.members.length > 0 && team.tasks.length > 0
+
+  const run = async (action: 'approve' | 'discard' | 'continue'): Promise<void> => {
+    setBusy(action)
+    setError(undefined)
+    try {
+      await planAction(team.captainSessionId, team.teamId, action)
+      // No local state flip: the next poll reflects disk truth (phase flips to
+      // running, or the team disappears into the archive) and unmounts us.
+    } catch (cause: unknown) {
+      setError(cause instanceof Error ? cause.message : String(cause))
+      setBusy(undefined)
+    }
+  }
+
+  return (
+    <div className={css.planBar} role='group' aria-label={t('plan.needsReview')}>
+      <p className={css.planBarText}>{t('plan.needsReview')}</p>
+      {error !== undefined && <p className={css.planError}>{error}</p>}
+      <div className={css.planActions}>
+        <button
+          type='button'
+          className={css.planApprove}
+          disabled={busy !== undefined || !runnable}
+          title={runnable ? undefined : t('plan.notRunnable')}
+          onClick={() => { void run('approve') }}
+        >
+          {busy === 'approve' ? '…' : t('plan.approve')}
+        </button>
+        <button
+          type='button'
+          className={css.planChat}
+          disabled={busy !== undefined}
+          onClick={() => { void run('continue') }}
+        >
+          {busy === 'continue' ? '…' : t('plan.returnToChat')}
+        </button>
+        {discardArmed ? (
+          <>
+            <button type='button' className={css.planCancel} onClick={() => { setDiscardArmed(false) }} disabled={busy !== undefined}>
+              {t('team.stopCancel')}
+            </button>
+            <button type='button' className={css.planDiscard} onClick={() => { void run('discard') }} disabled={busy !== undefined}>
+              {busy === 'discard' ? '…' : t('plan.discardConfirm')}
+            </button>
+          </>
+        ) : (
+          <button type='button' className={css.planDiscardArm} onClick={() => { setDiscardArmed(true) }} disabled={busy !== undefined}>
+            {t('plan.discard')}
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
 /** One team card: header, roster, DAG, inbox preview, and stop control. */
-function TeamCard({ team, t }: { team: TeamActivitySnapshot; t: ReturnType<typeof makeT> }): ReactElement {
+function TeamCard({ team, t, openMember }: {
+  team: TeamActivitySnapshot
+  t: ReturnType<typeof makeT>
+  openMember: ActivityPanelProps['openMember']
+}): ReactElement {
   const [confirming, setConfirming] = useState(false)
   const [stopping, setStopping] = useState(false)
   const [stopError, setStopError] = useState<string | undefined>(undefined)
@@ -291,6 +404,7 @@ function TeamCard({ team, t }: { team: TeamActivitySnapshot; t: ReturnType<typeo
 
   return (
     <section className={css.teamCard} data-phase={team.phase} data-halted={team.halted === true || undefined}>
+      {team.phase === 'staged' && <PlanReviewBar team={team} t={t} />}
       <header className={css.teamHeader}>
         <TeamsXLogo size={20} className={css.teamLogo} decorative />
         <div className={css.teamTitleBlock}>
@@ -329,7 +443,7 @@ function TeamCard({ team, t }: { team: TeamActivitySnapshot; t: ReturnType<typeo
       )}
 
       <div className={css.roster}>
-        {team.members.map((member) => <MemberRow key={member.id !== '' ? member.id : member.name} member={member} team={team} t={t} />)}
+        {team.members.map((member) => <MemberRow key={member.id !== '' ? member.id : member.name} member={member} team={team} t={t} openMember={openMember} />)}
       </div>
 
       <div className={css.dag}>
@@ -359,7 +473,7 @@ function TeamCard({ team, t }: { team: TeamActivitySnapshot; t: ReturnType<typeo
  * The session-scoped shell: a header chip that exists only when THIS session
  * owns or participates in a live team; the expanded panel portals to body.
  */
-export function ActivityPanel({ sessionId, t }: ActivityPanelProps): ReactElement | null {
+export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps): ReactElement | null {
   const translate = useMemo(() => makeT(t), [t])
   const [expanded, setExpanded] = useState(false)
   const badgeRef = useRef<HTMLButtonElement | null>(null)
@@ -458,7 +572,7 @@ export function ActivityPanel({ sessionId, t }: ActivityPanelProps): ReactElemen
             <p className={css.panelEmpty}>{translate('panel.empty')}</p>
           )}
           <div className={css.teamList}>
-            {sessionTeams.map((team) => <TeamCard key={`${team.workspace}/${team.teamId}`} team={team} t={translate} />)}
+            {sessionTeams.map((team) => <TeamCard key={`${team.workspace}/${team.teamId}`} team={team} t={translate} openMember={openMember} />)}
           </div>
         </div>,
         document.body,

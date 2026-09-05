@@ -97,6 +97,8 @@ const t = (key, params) => (params === undefined ? key : `${key}?${JSON.stringif
 const emptyHtml = renderToString(React.createElement(ActivityPanel, {
   sessionId: 'session-smoke',
   t,
+  sessions: {},
+  openMember: () => {},
 }))
 if (emptyHtml.trim() !== '') {
   throw new Error(`badge must be hidden for a session without teams, got ${emptyHtml.length} chars`)

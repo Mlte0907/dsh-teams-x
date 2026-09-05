@@ -35,6 +35,12 @@
   border-color: var(--dsw-alias-state-business-primary, #679efe);
 }
 
+/* The logo must never intercept clicks aimed at the badge button. */
+.badgeFab svg,
+.memberLink svg {
+  pointer-events: none;
+}
+
 .badgeFab[data-expanded] {
   border-color: var(--dsw-alias-state-business-primary, #679efe);
   background: var(--dsw-alias-interactive-bg-active, rgba(255, 255, 255, 0.14));
@@ -156,6 +162,76 @@
 
 .teamCard[data-halted] {
   opacity: 0.75;
+}
+
+/* Staged-plan review bar: approve / return-to-chat / discard. */
+.planBar {
+  border: 1px solid var(--dsw-alias-state-business-primary, #679efe);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.planBarText {
+  margin: 0;
+  font-size: 12px;
+}
+
+.planError {
+  margin: 0;
+  color: var(--dsw-alias-state-error-primary, #f25a5a);
+  font-size: 12px;
+}
+
+.planActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.planApprove,
+.planChat,
+.planDiscard,
+.planDiscardArm,
+.planCancel {
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.planApprove {
+  border: none;
+  background: var(--dsw-alias-state-business-primary, #679efe);
+  color: var(--dsw-alias-label-primary-foreground, #0f1115);
+  font-weight: 600;
+}
+
+.planApprove:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.planChat,
+.planDiscardArm,
+.planCancel {
+  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
+  background: transparent;
+  color: var(--dsw-alias-label-primary, #f9fafb);
+}
+
+.planChat:hover:not(:disabled),
+.planDiscardArm:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+}
+
+.planDiscard {
+  border: none;
+  background: var(--dsw-alias-state-error-primary, #f25a5a);
+  color: var(--dsw-alias-label-primary-foreground, #0f1115);
 }
 
 .teamHeader {
@@ -311,6 +387,24 @@
   white-space: nowrap;
 }
 
+/* Member name as a transcript link when the member has a child session. */
+.memberLink {
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: 600;
+  padding: 0;
+  cursor: pointer;
+  text-decoration: none;
+  border-bottom: 1px dotted var(--dsw-alias-border-l2, #3c3c3d);
+}
+
+.memberLink:hover {
+  color: var(--dsw-alias-state-business-primary, #679efe);
+  border-bottom-color: var(--dsw-alias-state-business-primary, #679efe);
+}
+
 .memberMeta {
   color: var(--dsw-alias-label-tertiary, #7d828a);
   font-size: 11px;
@@ -320,9 +414,36 @@
 }
 
 .memberProgress {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   font-variant-numeric: tabular-nums;
   font-size: 11px;
   color: var(--dsw-alias-label-secondary, #a8adb4);
+}
+
+.memberProgressBar {
+  width: 42px;
+  height: 3px;
+  border-radius: 999px;
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+  overflow: hidden;
+  display: inline-block;
+}
+
+.memberProgressFill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--dsw-alias-label-tertiary, #7d828a);
+}
+
+.memberProgressFill[data-active] {
+  background: var(--dsw-alias-state-business-primary, #679efe);
+}
+
+.memberProgressFill[data-done] {
+  background: var(--dsw-alias-state-success-primary, #22c55e);
 }
 
 .memberUnread {

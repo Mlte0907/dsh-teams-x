@@ -33,6 +33,8 @@ import type { TeamActivitySnapshot } from '../snapshot-types.ts'
 export const TEAMSX_STATE_URL = '/plugins/dsh-teams-x/state'
 /** Halt endpoint served by the host plane. */
 export const TEAMSX_HALT_URL = '/plugins/dsh-teams-x/halt'
+/** Per-member pause endpoint served by the host plane. */
+export const TEAMSX_PAUSE_URL = '/plugins/dsh-teams-x/member/pause'
 /** Poll cadence for the live view. */
 export const POLL_INTERVAL_MS = 4_000
 /** Collapsed discovery cadence: slow, but fast enough to notice a team the
@@ -107,11 +109,10 @@ function useTeamSnapshots(expanded: boolean): {
 }
 
 /**
- * Place the expanded panel under the badge, then shift it left until nothing
- * paints above it. Third-party overlay docks (e.g. better-sidebar) live in
- * higher stacking layers than a portal can assume, so placement is measured:
- * probe elementFromPoint at the panel's header and walk candidate `right`
- * offsets; re-probe on resize/interval so a closed dock returns the panel.
+ * Place the expanded panel as a dropdown under the badge, cleared below the
+ * session tab bar. Placement runs ONCE on open (plus on resize): no periodic
+ * re-probing, so the panel never visibly jumps after settling. The one-shot
+ * horizontal probe still dodges a higher-layer dock that would cover it.
  */
 function usePanelPlacement(
   badgeRef: RefObject<HTMLButtonElement | null>,
@@ -125,7 +126,11 @@ function usePanelPlacement(
       const badge = badgeRef.current
       if (badge === null) return
       const rect = badge.getBoundingClientRect()
-      let top = rect.bottom + 6
+      // Clear the session tab strip ("对话/轨迹/…") as the user asked: anchor
+      // under whichever is lower — the badge or the tab bar.
+      const tablist = document.querySelector('[role="tablist"]')
+      const tablistBottom = tablist === null ? 0 : tablist.getBoundingClientRect().bottom
+      let top = Math.max(rect.bottom + 6, tablistBottom + 8, 8)
       const maxH = Math.min(window.innerHeight * 0.72, 640)
       if (top + maxH > window.innerHeight - 8) {
         top = Math.max(8, window.innerHeight - maxH - 8)
@@ -134,6 +139,8 @@ function usePanelPlacement(
       const panel = panelRef.current
       let right = preferred
       if (panel !== null) {
+        // One-shot cover probe: shift left only if something would paint over
+        // the panel's header at the preferred spot.
         const candidates = [preferred, preferred + 80, preferred + 180, preferred + 320, preferred + 480]
         for (const candidate of candidates) {
           panel.style.right = `${candidate}px`
@@ -151,12 +158,8 @@ function usePanelPlacement(
       setPos((prev) => (prev.top === top && prev.right === right ? prev : { top, right }))
     }
     place()
-    const timer = window.setInterval(place, 1500)
     window.addEventListener('resize', place)
-    return () => {
-      window.clearInterval(timer)
-      window.removeEventListener('resize', place)
-    }
+    return () => { window.removeEventListener('resize', place) }
   }, [badgeRef, panelRef, expanded])
   return pos
 }
@@ -174,14 +177,46 @@ async function haltTeam(captainSessionId: string, teamId: string): Promise<void>
   }
 }
 
+/** POST the pause route for one member (interrupt; attempt stays parked). */
+async function pauseMember(captainSessionId: string, teamId: string, memberName: string): Promise<void> {
+  const response = await fetch(TEAMSX_PAUSE_URL, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ sessionId: captainSessionId, teamId, memberName }),
+  })
+  if (!response.ok) {
+    const body = await response.json().catch(() => ({ error: `HTTP ${response.status}` })) as { error?: string }
+    throw new Error(body.error ?? `HTTP ${response.status}`)
+  }
+}
+
 /** One member row of the roster. */
-function MemberRow({ member, t }: { member: TeamActivitySnapshot['members'][number]; t: ReturnType<typeof makeT> }): ReactElement {
+function MemberRow({ member, team, t }: {
+  member: TeamActivitySnapshot['members'][number]
+  team: TeamActivitySnapshot
+  t: ReturnType<typeof makeT>
+}): ReactElement {
+  const [pausing, setPausing] = useState(false)
+  const [pauseError, setPauseError] = useState<string | undefined>(undefined)
   const roleKey = (member.role?.trim().toLowerCase() ?? '') as keyof typeof ROLE_ICONS
   const RoleIcon = ROLE_ICONS[roleKey] as IconComponent | undefined
   const ActivityIcon = ACTIVITY_ICONS[member.activity] as IconComponent | undefined
   const stateKey = (member.activity === 'working' ? 'member.state.working'
     : member.activity === 'idle' ? 'member.state.idle'
       : 'member.state.unknown') as TeamsXLocaleKey
+
+  const pause = async (): Promise<void> => {
+    setPausing(true)
+    setPauseError(undefined)
+    try {
+      await pauseMember(team.captainSessionId, team.teamId, member.name)
+    } catch (cause: unknown) {
+      setPauseError(cause instanceof Error ? cause.message : String(cause))
+    } finally {
+      setPausing(false)
+    }
+  }
+
   return (
     <div className={css.memberRow} data-activity={member.activity}>
       <span className={css.memberIcon}>
@@ -190,7 +225,7 @@ function MemberRow({ member, t }: { member: TeamActivitySnapshot['members'][numb
           : <TeamsXLogo size={18} label={member.name} />}
       </span>
       <span className={css.memberName} title={member.name}>{member.name}</span>
-      <span className={css.memberMeta}>{member.model}</span>
+      <span className={css.memberMeta}>{pauseError ?? member.model}</span>
       <span className={css.memberProgress}>{t('member.progress', { done: member.done, total: member.total })}</span>
       {member.unread > 0 && (
         <span className={css.memberUnread} title={t('member.unread', { count: member.unread })}>{member.unread}</span>
@@ -198,6 +233,18 @@ function MemberRow({ member, t }: { member: TeamActivitySnapshot['members'][numb
       <span className={css.memberState}>
         {ActivityIcon !== undefined && <ActivityIcon size={14} className={member.activity === 'working' ? css.animPulse : undefined} decorative />}
         {t(stateKey)}
+        {member.activity === 'working' && (
+          <button
+            type='button'
+            className={css.memberPause}
+            onClick={() => { void pause() }}
+            disabled={pausing}
+            aria-label={t('member.pause')}
+            title={t('member.pause')}
+          >
+            {pausing ? '…' : '⏸'}
+          </button>
+        )}
       </span>
     </div>
   )
@@ -282,7 +329,7 @@ function TeamCard({ team, t }: { team: TeamActivitySnapshot; t: ReturnType<typeo
       )}
 
       <div className={css.roster}>
-        {team.members.map((member) => <MemberRow key={member.id !== '' ? member.id : member.name} member={member} t={t} />)}
+        {team.members.map((member) => <MemberRow key={member.id !== '' ? member.id : member.name} member={member} team={team} t={t} />)}
       </div>
 
       <div className={css.dag}>
