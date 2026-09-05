@@ -21,5 +21,5 @@ export interface ActivityPanelProps {
     /** Translate function bound to the `teamsX` locale namespace. */
     readonly t: PanelTranslate;
 }
-/** The panel shell: poll state, list team cards. */
-export declare function ActivityPanel({ t }: ActivityPanelProps): ReactElement;
+/** The panel shell: a collapsed floating badge by default; expanded on click. */
+export declare function ActivityPanel({ t }: ActivityPanelProps): ReactElement | null;

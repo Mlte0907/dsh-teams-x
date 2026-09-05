@@ -329,7 +329,14 @@ function isTeamState(value: unknown, expectedId: string): value is TeamState {
   return true
 }
 
-/** Tolerate legacy dirty records instead of bricking the team on reload. */
+/**
+ * Tolerate legacy or hand-edited records instead of bricking the team on
+ * reload: blank optional strings collapse to omitted, and unknown enum values
+ * coerce to their nearest meaning (any unrecognized `phase` reads as
+ * `running`; an unrecognized `planReviewState` is dropped). Structural
+ * violations (missing/ill-typed required fields) still reject, with the
+ * reason available via {@link describeTeamStateError}.
+ */
 function coerceTeamState(value: unknown, expectedId: string): TeamState | undefined {
   if (!isRecord(value) || !Array.isArray(value['tasks'])) return undefined
   const tasks = (value['tasks'] as unknown[]).map((task) => {
@@ -348,8 +355,65 @@ function coerceTeamState(value: unknown, expectedId: string): TeamState | undefi
     }
     return cleaned
   })
-  const coerced = { ...value, tasks }
+  const coerced: Record<string, unknown> = { ...value, tasks }
+  // Enum tolerance: a hand-edited or future-phase value maps to its nearest
+  // meaning rather than invalidating the whole durable record.
+  if (coerced['phase'] !== undefined && coerced['phase'] !== 'staged') {
+    coerced['phase'] = 'running'
+  }
+  if (coerced['phase'] !== 'staged' || (coerced['planReviewState'] !== 'awaiting_review'
+    && coerced['planReviewState'] !== 'awaiting_feedback')) {
+    delete coerced['planReviewState']
+  }
   return isTeamState(coerced, expectedId) ? coerced : undefined
+}
+
+/**
+ * Describe the first structural reason a team record failed validation, for
+ * error messages. Best-effort: returns a short human-readable cause.
+ */
+export function describeTeamStateError(value: unknown, expectedId: string): string {
+  if (!isRecord(value)) return 'team.json is not a JSON object'
+  if (value['id'] !== expectedId) return `id "${String(value['id'])}" does not match directory "${expectedId}"`
+  if (typeof value['name'] !== 'string' || (value['name'] as string).trim() === '') return 'name must be a non-empty string'
+  if (typeof value['captainSessionId'] !== 'string' || (value['captainSessionId'] as string) === '') return 'captainSessionId must be a non-empty string'
+  if (!Array.isArray(value['members'])) return 'members must be an array'
+  const members = value['members'] as unknown[]
+  const badMember = members.findIndex((member) => !isTeamMember(member))
+  if (badMember >= 0) return `members[${badMember}] is not a valid member record (needs string id/name, finite joinedAt, status idle|working|removed)`
+  if (!Array.isArray(value['tasks'])) return 'tasks must be an array'
+  const tasks = value['tasks'] as unknown[]
+  const badTask = tasks.findIndex((task) => !isTeamTask(task))
+  if (badTask >= 0) return `tasks[${badTask}] is not a valid task record (needs id/subject/status/dependencies/createdAt/updatedAt)`
+  if (!Number.isSafeInteger(value['taskSeq'])) return 'taskSeq must be a safe integer'
+  return 'unknown structural violation'
+}
+
+/**
+ * Scan the state root and report each team's loadability. Used to enrich
+ * authorization errors: a team that exists but fails validation must not
+ * masquerade as "no team at all".
+ */
+export async function stateRootDiagnostics(
+  stateRoot: string,
+): Promise<Array<{ id: string; valid: boolean; error?: string }>> {
+  let entries
+  try {
+    entries = await readdir(stateRoot, { withFileTypes: true })
+  } catch {
+    return []
+  }
+  const report: Array<{ id: string; valid: boolean; error?: string }> = []
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name === 'archive') continue
+    try {
+      const team = await readTeam(stateRoot, entry.name)
+      report.push({ id: entry.name, valid: team !== undefined, ...team === undefined ? { error: 'unreadable' } : {} })
+    } catch (error: unknown) {
+      report.push({ id: entry.name, valid: false, error: error instanceof Error ? error.message : String(error) })
+    }
+  }
+  return report
 }
 
 // ── team CRUD ──
@@ -384,7 +448,9 @@ export async function readTeam(stateRoot: string, teamId: string): Promise<TeamS
     const raw = await readFile(join(stateRoot, teamId, 'team.json'), 'utf8')
     const value: unknown = JSON.parse(stripLeadingBom(raw))
     const team = coerceTeamState(value, teamId)
-    if (team === undefined) throw new Error(`invalid TeamsX state in team "${teamId}"`)
+    if (team === undefined) {
+      throw new Error(`invalid TeamsX state in team "${teamId}": ${describeTeamStateError(value, teamId)}`)
+    }
     return team
   } catch (error: unknown) {
     if (error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -400,7 +466,9 @@ export function readTeamSync(stateRoot: string, teamId: string): TeamState | und
     const raw = readFileSync(join(stateRoot, teamId, 'team.json'), 'utf8')
     const value: unknown = JSON.parse(stripLeadingBom(raw))
     const team = coerceTeamState(value, teamId)
-    if (team === undefined) throw new Error(`invalid TeamsX state in team "${teamId}"`)
+    if (team === undefined) {
+      throw new Error(`invalid TeamsX state in team "${teamId}": ${describeTeamStateError(value, teamId)}`)
+    }
     return team
   } catch (error: unknown) {
     if (error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT') {

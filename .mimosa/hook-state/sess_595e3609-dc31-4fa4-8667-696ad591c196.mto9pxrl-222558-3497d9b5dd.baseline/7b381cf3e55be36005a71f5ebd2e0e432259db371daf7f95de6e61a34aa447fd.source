@@ -34,6 +34,7 @@ import {
   reindexTeam,
   readUnreadMailbox,
   sanitizeKey,
+  stateRootDiagnostics,
   unsatisfiedDependencies,
   withTeamLock,
   writeTeam,
@@ -145,21 +146,33 @@ function captainLockKey(stateRoot: string, captainId: string): string {
   return `captain:${stateRoot}:${captainId}`
 }
 
+/** Append state-root diagnostics to an authorization miss, so a team that
+ * exists on disk but fails validation never masquerades as "no team". */
+async function authorizationMissHint(stateRoot: string): Promise<string> {
+  const diagnostics = await stateRootDiagnostics(stateRoot)
+  if (diagnostics.length === 0) return ''
+  const lines = diagnostics.map((entry) => entry.valid
+    ? entry.id
+    : `${entry.id} (unusable: ${entry.error ?? 'unreadable'})`)
+  return ` State root ${stateRoot} contains: ${lines.join(', ')}.`
+}
+
 /** The team this captain currently leads, or a loud failure. */
 async function requireCaptainTeam(workspace: string, config: ToolsConfig, captain: Agent): Promise<TeamState> {
   const stateRoot = stateRootOf(workspace, config)
   const team = await findTeamByParticipant(stateRoot, captain.id)
   if (team === undefined || team.captainSessionId !== captain.id) {
-    throw new Error('you are not leading any team yet — call teamsx_create first')
+    throw new Error(`you are not leading any team yet — call teamsx_create first.${await authorizationMissHint(stateRoot)}`)
   }
   return team
 }
 
 /** The team this captain or active member currently participates in. */
 async function requireParticipantTeam(workspace: string, config: ToolsConfig, caller: Agent): Promise<TeamState> {
-  const team = await findTeamByParticipant(stateRootOf(workspace, config), caller.id)
+  const stateRoot = stateRootOf(workspace, config)
+  const team = await findTeamByParticipant(stateRoot, caller.id)
   if (team === undefined) {
-    throw new Error('you do not lead or belong to any active team yet')
+    throw new Error(`you do not lead or belong to any active team yet.${await authorizationMissHint(stateRoot)}`)
   }
   return team
 }

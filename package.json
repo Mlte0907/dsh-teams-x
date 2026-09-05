@@ -48,6 +48,7 @@
     "build": "node scripts/clean-build.mjs && tsc -p tsconfig.json && tsc -p tsconfig.client.json && tsdown",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.client.json --noEmit",
     "smoke:client": "node --import ./scripts/register-css-stub.mjs scripts/client-smoke.mjs",
+    "verify:flow": "node --experimental-strip-types scripts/verify-flow.mjs",
     "icons": "node --experimental-strip-types scripts/export-icons.mjs",
     "verify:icons": "node --experimental-strip-types scripts/export-icons.mjs --check"
   },

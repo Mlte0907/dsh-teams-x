@@ -41,7 +41,12 @@ export declare function isQualityKind(kind: TaskKind | undefined): boolean;
 export declare function normalizeWorkspacePath(path: string): string | undefined;
 export declare function pathMatchesScope(path: string, pattern: string): boolean;
 export declare function classifyChangedPath(path: string, inScope?: readonly string[], outOfScope?: readonly string[]): PathClassification;
-/** Normalize model-materialized blank optional fields (`""` → omitted). */
+/**
+ * Normalize model-materialized blank optional fields (`""` → omitted).
+ * `dependencies` is deliberately NOT touched: it is a required structural
+ * field the call sites default to `[]`, and dropping it here would leak into
+ * the durable state and brick reloads (same class as the reference's #105).
+ */
 export declare function normalizeBlankOptionalTaskFields<T extends Record<string, unknown>>(input: T): T;
 /** Validate one create_task request against quality-gate contracts. */
 export declare function validateCreateTask(tasks: readonly TeamTask[], input: CreateTaskInput): {

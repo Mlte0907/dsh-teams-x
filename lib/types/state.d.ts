@@ -37,6 +37,23 @@ export declare function withTeamLock<T>(key: string, fn: () => Promise<T>): Prom
  * Over-long names are truncated with a digest appended.
  */
 export declare function sanitizeKey(name: string): string;
+/**
+ * Describe the first reason a (raw, pre-coercion) team record would fail
+ * validation, walking every isTeamState check in order. Best-effort and
+ * verbose by design: an unusable durable record must never masquerade as a
+ * generic failure.
+ */
+export declare function describeTeamStateError(value: unknown, expectedId: string): string;
+/**
+ * Scan the state root and report each team's loadability. Used to enrich
+ * authorization errors: a team that exists but fails validation must not
+ * masquerade as "no team at all".
+ */
+export declare function stateRootDiagnostics(stateRoot: string): Promise<Array<{
+    id: string;
+    valid: boolean;
+    error?: string;
+}>>;
 /** Create the team directory structure and the initial team record. */
 export declare function createTeamDir(stateRoot: string, state: TeamState): Promise<void>;
 /**

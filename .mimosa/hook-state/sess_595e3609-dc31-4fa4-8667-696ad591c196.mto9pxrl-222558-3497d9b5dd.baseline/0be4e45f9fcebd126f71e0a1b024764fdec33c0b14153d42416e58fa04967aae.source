@@ -53,13 +53,15 @@ function makeT(t: PanelTranslate): (key: TeamsXLocaleKey, params?: Record<string
   return (key, params) => format(t(key, params), params)
 }
 
-/** Poll the state endpoint on an interval while mounted. */
-function useTeamSnapshots(): { teams: TeamActivitySnapshot[]; error?: string; reload: () => void } {
+/** Poll the state endpoint: once on mount, then on an interval ONLY while expanded. */
+function useTeamSnapshots(expanded: boolean): { teams: TeamActivitySnapshot[]; error?: string; reload: () => void } {
   const [teams, setTeams] = useState<TeamActivitySnapshot[]>([])
   const [error, setError] = useState<string | undefined>(undefined)
   const [tick, setTick] = useState(0)
 
   useEffect(() => {
+    // Collapsed: one discovery fetch only, no recurring background activity.
+    if (!expanded && tick > 0) return
     let disposed = false
     const load = async (): Promise<void> => {
       try {
@@ -75,12 +77,13 @@ function useTeamSnapshots(): { teams: TeamActivitySnapshot[]; error?: string; re
       }
     }
     void load()
+    if (!expanded) return () => { disposed = true }
     const timer = window.setInterval(() => { void load() }, POLL_INTERVAL_MS)
     return () => {
       disposed = true
       window.clearInterval(timer)
     }
-  }, [tick])
+  }, [expanded, tick])
 
   return { teams, error, reload: () => setTick((value) => value + 1) }
 }
@@ -232,16 +235,45 @@ function TeamCard({ team, t }: { team: TeamActivitySnapshot; t: ReturnType<typeo
   )
 }
 
-/** The panel shell: poll state, list team cards. */
-export function ActivityPanel({ t }: ActivityPanelProps): ReactElement {
+/** The panel shell: a collapsed floating badge by default; expanded on click. */
+export function ActivityPanel({ t }: ActivityPanelProps): ReactElement | null {
   const translate = useMemo(() => makeT(t), [t])
-  const { teams, error, reload } = useTeamSnapshots()
+  // Collapsed by default: the shell.overlay layer covers the whole app, so
+  // this component must occupy nothing until the user opens it.
+  const [expanded, setExpanded] = useState(false)
+  const { teams, error, reload } = useTeamSnapshots(expanded)
+  const activeTeams = teams.filter((team) => team.halted !== true)
+  const workingCount = activeTeams.reduce((count, team) => (
+    count + team.members.filter((member) => member.activity === 'working').length
+  ), 0)
+
+  if (!expanded) {
+    // No teams and no error: render nothing at all into the overlay layer.
+    if (teams.length === 0 && error === undefined) return null
+    return (
+      <button
+        type='button'
+        className={css.badgeFab}
+        onClick={() => { setExpanded(true) }}
+        aria-label={translate('panel.aria')}
+        title={translate('panel.title')}
+      >
+        <TeamsXLogo size={16} />
+        <span className={css.badgeFabCount}>{teams.length}</span>
+        {workingCount > 0 && <span className={css.badgeFabBusy} data-busy>{workingCount}</span>}
+      </button>
+    )
+  }
+
   return (
-    <div className={css.panel} role='region' aria-label={translate('panel.aria')}>
+    <div className={css.panelWindow} role='region' aria-label={translate('panel.aria')}>
       <header className={css.panelHeader}>
         <h2 className={css.panelTitle}><TeamsXLogo size={18} /> {translate('panel.title')}</h2>
         <button type='button' className={css.refreshButton} onClick={reload} aria-label={translate('panel.refresh')}>
           <span className={css.animSpin}>⟳</span>
+        </button>
+        <button type='button' className={css.refreshButton} onClick={() => { setExpanded(false) }} aria-label={translate('panel.refresh')}>
+          ✕
         </button>
       </header>
       {error !== undefined && <p className={css.panelError}>{translate('panel.error', { message: error })}</p>}
