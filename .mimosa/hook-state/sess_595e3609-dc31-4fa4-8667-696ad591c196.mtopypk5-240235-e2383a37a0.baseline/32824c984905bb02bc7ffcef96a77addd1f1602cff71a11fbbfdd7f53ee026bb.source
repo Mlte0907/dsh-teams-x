@@ -14,6 +14,9 @@ importers:
       '@deepseek-ai/dsh-agent':
         specifier: link:/home/xiaoxin/deepseek-harness/packages/core/agent
         version: link:../deepseek-harness/packages/core/agent
+      '@deepseek-ai/dsh-api-session-controller':
+        specifier: link:/home/xiaoxin/deepseek-harness/packages/api/session-controller
+        version: link:../deepseek-harness/packages/api/session-controller
       '@deepseek-ai/dsh-client-connection':
         specifier: link:/home/xiaoxin/deepseek-harness/packages/client/connection
         version: link:../deepseek-harness/packages/client/connection

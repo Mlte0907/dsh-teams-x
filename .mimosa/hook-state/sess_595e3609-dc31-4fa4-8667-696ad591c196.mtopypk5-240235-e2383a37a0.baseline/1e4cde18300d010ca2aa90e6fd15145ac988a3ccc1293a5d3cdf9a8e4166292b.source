@@ -24,6 +24,8 @@ export const TEAMSX_STATE_URL = '/plugins/dsh-teams-x/state';
 export const TEAMSX_HALT_URL = '/plugins/dsh-teams-x/halt';
 /** Per-member pause endpoint served by the host plane. */
 export const TEAMSX_PAUSE_URL = '/plugins/dsh-teams-x/member/pause';
+/** Staged-plan review endpoint served by the host plane. */
+export const TEAMSX_PLAN_URL = '/plugins/dsh-teams-x/plan';
 /** Poll cadence for the live view. */
 export const POLL_INTERVAL_MS = 4_000;
 /** Collapsed discovery cadence: slow, but fast enough to notice a team the
@@ -159,7 +161,7 @@ async function pauseMember(captainSessionId, teamId, memberName) {
     }
 }
 /** One member row of the roster. */
-function MemberRow({ member, team, t }) {
+function MemberRow({ member, team, t, openMember }) {
     const [pausing, setPausing] = useState(false);
     const [pauseError, setPauseError] = useState(undefined);
     const roleKey = (member.role?.trim().toLowerCase() ?? '');
@@ -168,6 +170,7 @@ function MemberRow({ member, team, t }) {
     const stateKey = (member.activity === 'working' ? 'member.state.working'
         : member.activity === 'idle' ? 'member.state.idle'
             : 'member.state.unknown');
+    const openable = member.id !== '';
     const pause = async () => {
         setPausing(true);
         setPauseError(undefined);
@@ -183,7 +186,7 @@ function MemberRow({ member, team, t }) {
     };
     return (_jsxs("div", { className: css.memberRow, "data-activity": member.activity, children: [_jsx("span", { className: css.memberIcon, children: RoleIcon !== undefined
                     ? _jsx(RoleIcon, { size: 18, decorative: true })
-                    : _jsx(TeamsXLogo, { size: 18, label: member.name }) }), _jsx("span", { className: css.memberName, title: member.name, children: member.name }), _jsx("span", { className: css.memberMeta, children: pauseError ?? member.model }), _jsx("span", { className: css.memberProgress, children: t('member.progress', { done: member.done, total: member.total }) }), member.unread > 0 && (_jsx("span", { className: css.memberUnread, title: t('member.unread', { count: member.unread }), children: member.unread })), _jsxs("span", { className: css.memberState, children: [ActivityIcon !== undefined && _jsx(ActivityIcon, { size: 14, className: member.activity === 'working' ? css.animPulse : undefined, decorative: true }), t(stateKey), member.activity === 'working' && (_jsx("button", { type: 'button', className: css.memberPause, onClick: () => { void pause(); }, disabled: pausing, "aria-label": t('member.pause'), title: t('member.pause'), children: pausing ? '…' : '⏸' }))] })] }));
+                    : _jsx(TeamsXLogo, { size: 18, label: member.name }) }), _jsx("span", { className: css.memberName, title: member.name, children: openable ? (_jsx("button", { type: 'button', className: css.memberLink, onClick: () => { openMember(team.captainSessionId, member.id); }, title: t('member.openSession'), children: member.name })) : member.name }), _jsx("span", { className: css.memberMeta, children: pauseError ?? member.model }), _jsxs("span", { className: css.memberProgress, title: t('member.progress', { done: member.done, total: member.total }), children: [_jsx("span", { className: css.memberProgressBar, "aria-hidden": true, children: _jsx("span", { className: css.memberProgressFill, style: { width: `${member.progress}%` }, "data-active": member.progress > 0 && member.progress < 100 || undefined, "data-done": member.progress >= 100 || undefined }) }), t('member.progress', { done: member.done, total: member.total })] }), member.unread > 0 && (_jsx("span", { className: css.memberUnread, title: t('member.unread', { count: member.unread }), children: member.unread })), _jsxs("span", { className: css.memberState, children: [ActivityIcon !== undefined && _jsx(ActivityIcon, { size: 14, className: member.activity === 'working' ? css.animPulse : undefined, decorative: true }), t(stateKey), member.activity === 'working' && (_jsx("button", { type: 'button', className: css.memberPause, onClick: () => { void pause(); }, disabled: pausing, "aria-label": t('member.pause'), title: t('member.pause'), children: pausing ? '…' : '⏸' }))] })] }));
 }
 /** One task row of the DAG list, indented by dependency depth. */
 function TaskRow({ task, t }) {
@@ -195,8 +198,41 @@ function TaskRow({ task, t }) {
             : task.assignee;
     return (_jsxs("div", { className: css.taskRow, "data-state": task.state, style: { marginInlineStart: `${Math.min(task.depth, 4) * 18}px` }, children: [_jsx("span", { className: css.taskIcon, children: StateIcon !== undefined && _jsx(StateIcon, { size: 14, className: task.state === 'running' ? css.animPulse : undefined, decorative: true }) }), _jsx("span", { className: css.taskId, children: task.id }), _jsx("span", { className: css.taskSubject, title: task.description || task.subject, children: task.subject }), _jsx("span", { className: css.taskAssignee, children: assignee }), _jsx("span", { className: css.taskStatus, title: t(visualKey), children: t(statusKey) })] }));
 }
+/** POST one staged-plan review action. */
+async function planAction(captainSessionId, teamId, action) {
+    const response = await fetch(TEAMSX_PLAN_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId: captainSessionId, teamId, action }),
+    });
+    if (!response.ok) {
+        const body = await response.json().catch(() => ({ error: `HTTP ${response.status}` }));
+        throw new Error(body.error ?? `HTTP ${response.status}`);
+    }
+}
+/** The staged-plan review bar: approve, return-to-chat, and discard (2-step). */
+function PlanReviewBar({ team, t }) {
+    const [busy, setBusy] = useState(undefined);
+    const [discardArmed, setDiscardArmed] = useState(false);
+    const [error, setError] = useState(undefined);
+    const runnable = team.members.length > 0 && team.tasks.length > 0;
+    const run = async (action) => {
+        setBusy(action);
+        setError(undefined);
+        try {
+            await planAction(team.captainSessionId, team.teamId, action);
+            // No local state flip: the next poll reflects disk truth (phase flips to
+            // running, or the team disappears into the archive) and unmounts us.
+        }
+        catch (cause) {
+            setError(cause instanceof Error ? cause.message : String(cause));
+            setBusy(undefined);
+        }
+    };
+    return (_jsxs("div", { className: css.planBar, role: 'group', "aria-label": t('plan.needsReview'), children: [_jsx("p", { className: css.planBarText, children: t('plan.needsReview') }), error !== undefined && _jsx("p", { className: css.planError, children: error }), _jsxs("div", { className: css.planActions, children: [_jsx("button", { type: 'button', className: css.planApprove, disabled: busy !== undefined || !runnable, title: runnable ? undefined : t('plan.notRunnable'), onClick: () => { void run('approve'); }, children: busy === 'approve' ? '…' : t('plan.approve') }), _jsx("button", { type: 'button', className: css.planChat, disabled: busy !== undefined, onClick: () => { void run('continue'); }, children: busy === 'continue' ? '…' : t('plan.returnToChat') }), discardArmed ? (_jsxs(_Fragment, { children: [_jsx("button", { type: 'button', className: css.planCancel, onClick: () => { setDiscardArmed(false); }, disabled: busy !== undefined, children: t('team.stopCancel') }), _jsx("button", { type: 'button', className: css.planDiscard, onClick: () => { void run('discard'); }, disabled: busy !== undefined, children: busy === 'discard' ? '…' : t('plan.discardConfirm') })] })) : (_jsx("button", { type: 'button', className: css.planDiscardArm, onClick: () => { setDiscardArmed(true); }, disabled: busy !== undefined, children: t('plan.discard') }))] })] }));
+}
 /** One team card: header, roster, DAG, inbox preview, and stop control. */
-function TeamCard({ team, t }) {
+function TeamCard({ team, t, openMember }) {
     const [confirming, setConfirming] = useState(false);
     const [stopping, setStopping] = useState(false);
     const [stopError, setStopError] = useState(undefined);
@@ -215,7 +251,7 @@ function TeamCard({ team, t }) {
             setStopping(false);
         }
     };
-    return (_jsxs("section", { className: css.teamCard, "data-phase": team.phase, "data-halted": team.halted === true || undefined, children: [_jsxs("header", { className: css.teamHeader, children: [_jsx(TeamsXLogo, { size: 20, className: css.teamLogo, decorative: true }), _jsxs("div", { className: css.teamTitleBlock, children: [_jsx("h3", { className: css.teamName, children: team.name }), team.description !== undefined && _jsx("p", { className: css.teamGoal, children: team.description })] }), _jsxs("div", { className: css.teamBadges, children: [_jsx("span", { className: css.badge, children: t(team.phase === 'staged' ? 'team.phase.staged' : 'team.phase.running') }), team.planReviewState !== undefined && (_jsx("span", { className: css.badgeMuted, children: t(`team.planReview.${team.planReviewState}`) })), team.halted === true && _jsx("span", { className: css.badgeWarn, children: t('team.halted') }), _jsx("span", { className: css.badgeMuted, children: t('team.members', { count: team.members.length }) }), _jsx("span", { className: css.badgeMuted, children: t('team.done', { done, total: team.tasks.length }) })] }), team.phase === 'running' && team.halted !== true && !confirming && (_jsx("button", { type: 'button', className: css.stopButton, onClick: () => { setConfirming(true); }, children: t('team.stop') }))] }), confirming && (_jsxs("div", { className: css.stopConfirmBox, role: 'alertdialog', "aria-label": t('team.stopTitle', { team: team.name }), children: [_jsx("p", { children: t('team.stopDescription', { tasks: team.tasks.filter((task) => task.status === 'pending' || task.status === 'claimed' || task.status === 'in_progress').length, members: team.members.filter((member) => member.activity === 'working').length }) }), stopError !== undefined && _jsx("p", { className: css.stopError, children: t('team.stopFailed', { message: stopError }) }), _jsxs("div", { className: css.stopActions, children: [_jsx("button", { type: 'button', className: css.stopCancel, onClick: () => { setConfirming(false); }, disabled: stopping, children: t('team.stopCancel') }), _jsx("button", { type: 'button', className: css.stopConfirm, onClick: () => { void stop(); }, disabled: stopping, children: stopping ? t('team.stopping') : t('team.stopConfirm') })] })] })), _jsx("div", { className: css.roster, children: team.members.map((member) => _jsx(MemberRow, { member: member, team: team, t: t }, member.id !== '' ? member.id : member.name)) }), _jsx("div", { className: css.dag, children: team.tasks.map((task) => _jsx(TaskRow, { task: task, t: t }, task.id)) }), _jsxs("footer", { className: css.inbox, children: [_jsx("h4", { className: css.inboxTitle, children: t('inbox.title') }), team.captainInbox.length === 0
+    return (_jsxs("section", { className: css.teamCard, "data-phase": team.phase, "data-halted": team.halted === true || undefined, children: [team.phase === 'staged' && _jsx(PlanReviewBar, { team: team, t: t }), _jsxs("header", { className: css.teamHeader, children: [_jsx(TeamsXLogo, { size: 20, className: css.teamLogo, decorative: true }), _jsxs("div", { className: css.teamTitleBlock, children: [_jsx("h3", { className: css.teamName, children: team.name }), team.description !== undefined && _jsx("p", { className: css.teamGoal, children: team.description })] }), _jsxs("div", { className: css.teamBadges, children: [_jsx("span", { className: css.badge, children: t(team.phase === 'staged' ? 'team.phase.staged' : 'team.phase.running') }), team.planReviewState !== undefined && (_jsx("span", { className: css.badgeMuted, children: t(`team.planReview.${team.planReviewState}`) })), team.halted === true && _jsx("span", { className: css.badgeWarn, children: t('team.halted') }), _jsx("span", { className: css.badgeMuted, children: t('team.members', { count: team.members.length }) }), _jsx("span", { className: css.badgeMuted, children: t('team.done', { done, total: team.tasks.length }) })] }), team.phase === 'running' && team.halted !== true && !confirming && (_jsx("button", { type: 'button', className: css.stopButton, onClick: () => { setConfirming(true); }, children: t('team.stop') }))] }), confirming && (_jsxs("div", { className: css.stopConfirmBox, role: 'alertdialog', "aria-label": t('team.stopTitle', { team: team.name }), children: [_jsx("p", { children: t('team.stopDescription', { tasks: team.tasks.filter((task) => task.status === 'pending' || task.status === 'claimed' || task.status === 'in_progress').length, members: team.members.filter((member) => member.activity === 'working').length }) }), stopError !== undefined && _jsx("p", { className: css.stopError, children: t('team.stopFailed', { message: stopError }) }), _jsxs("div", { className: css.stopActions, children: [_jsx("button", { type: 'button', className: css.stopCancel, onClick: () => { setConfirming(false); }, disabled: stopping, children: t('team.stopCancel') }), _jsx("button", { type: 'button', className: css.stopConfirm, onClick: () => { void stop(); }, disabled: stopping, children: stopping ? t('team.stopping') : t('team.stopConfirm') })] })] })), _jsx("div", { className: css.roster, children: team.members.map((member) => _jsx(MemberRow, { member: member, team: team, t: t, openMember: openMember }, member.id !== '' ? member.id : member.name)) }), _jsx("div", { className: css.dag, children: team.tasks.map((task) => _jsx(TaskRow, { task: task, t: t }, task.id)) }), _jsxs("footer", { className: css.inbox, children: [_jsx("h4", { className: css.inboxTitle, children: t('inbox.title') }), team.captainInbox.length === 0
                         ? _jsx("p", { className: css.inboxEmpty, children: t('inbox.empty') })
                         : (_jsx("ul", { className: css.inboxList, children: team.captainInbox.map((message, index) => (_jsxs("li", { className: css.inboxItem, children: [_jsx("span", { className: css.inboxFrom, children: message.from }), _jsx("span", { className: css.inboxContent, children: message.content })] }, `${message.from}-${index}`))) }))] })] }));
 }
@@ -223,7 +259,7 @@ function TeamCard({ team, t }) {
  * The session-scoped shell: a header chip that exists only when THIS session
  * owns or participates in a live team; the expanded panel portals to body.
  */
-export function ActivityPanel({ sessionId, t }) {
+export function ActivityPanel({ sessionId, t, openMember }) {
     const translate = useMemo(() => makeT(t), [t]);
     const [expanded, setExpanded] = useState(false);
     const badgeRef = useRef(null);
@@ -264,5 +300,5 @@ export function ActivityPanel({ sessionId, t }) {
     const badge = (_jsxs("button", { type: 'button', ref: badgeRef, className: css.badgeFab, "data-expanded": expanded === true || undefined, onClick: () => { setExpanded((value) => !value); }, "aria-label": translate('panel.aria'), "aria-expanded": expanded === true || undefined, title: translate('panel.title'), children: [_jsx(TeamsXLogo, { size: 14, decorative: true }), _jsx("span", { className: css.badgeFabCount, children: sessionTeams.length }), workingCount > 0 && _jsx("span", { className: css.badgeFabBusy, "data-busy": true, children: workingCount })] }));
     if (!expanded)
         return badge;
-    return (_jsxs(_Fragment, { children: [badge, createPortal(_jsxs("div", { className: css.panelWindow, ref: panelRef, style: { top: `${placement.top}px`, right: `${placement.right}px` }, role: 'region', "aria-label": translate('panel.aria'), children: [_jsxs("header", { className: css.panelHeader, children: [_jsxs("h2", { className: css.panelTitle, children: [_jsx(TeamsXLogo, { size: 18, decorative: true }), " ", translate('panel.title')] }), _jsxs("div", { className: css.panelActions, children: [_jsx("button", { type: 'button', className: css.refreshButton, onClick: reload, "data-loading": loading === true || undefined, "aria-label": translate('panel.refresh'), title: translate('panel.refresh'), children: _jsx("span", { className: loading === true ? css.animSpin : undefined, children: "\u27F3" }) }), _jsx("button", { type: 'button', className: css.refreshButton, onClick: () => { setExpanded(false); }, "aria-label": translate('panel.close'), title: translate('panel.close'), children: "\u2715" })] })] }), error !== undefined && _jsx("p", { className: css.panelError, children: translate('panel.error', { message: error }) }), error === undefined && sessionTeams.length === 0 && (_jsx("p", { className: css.panelEmpty, children: translate('panel.empty') })), _jsx("div", { className: css.teamList, children: sessionTeams.map((team) => _jsx(TeamCard, { team: team, t: translate }, `${team.workspace}/${team.teamId}`)) })] }), document.body)] }));
+    return (_jsxs(_Fragment, { children: [badge, createPortal(_jsxs("div", { className: css.panelWindow, ref: panelRef, style: { top: `${placement.top}px`, right: `${placement.right}px` }, role: 'region', "aria-label": translate('panel.aria'), children: [_jsxs("header", { className: css.panelHeader, children: [_jsxs("h2", { className: css.panelTitle, children: [_jsx(TeamsXLogo, { size: 18, decorative: true }), " ", translate('panel.title')] }), _jsxs("div", { className: css.panelActions, children: [_jsx("button", { type: 'button', className: css.refreshButton, onClick: reload, "data-loading": loading === true || undefined, "aria-label": translate('panel.refresh'), title: translate('panel.refresh'), children: _jsx("span", { className: loading === true ? css.animSpin : undefined, children: "\u27F3" }) }), _jsx("button", { type: 'button', className: css.refreshButton, onClick: () => { setExpanded(false); }, "aria-label": translate('panel.close'), title: translate('panel.close'), children: "\u2715" })] })] }), error !== undefined && _jsx("p", { className: css.panelError, children: translate('panel.error', { message: error }) }), error === undefined && sessionTeams.length === 0 && (_jsx("p", { className: css.panelEmpty, children: translate('panel.empty') })), _jsx("div", { className: css.teamList, children: sessionTeams.map((team) => _jsx(TeamCard, { team: team, t: translate, openMember: openMember }, `${team.workspace}/${team.teamId}`)) })] }), document.body)] }));
 }

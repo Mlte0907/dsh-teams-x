@@ -26,6 +26,7 @@ import {
   createMessage,
   createTeamDir,
   findTeamByParticipant,
+  listTeamsForParticipant,
   cancelUnfinishedTask,
   invalidateTaskAttempt,
   readTeam,
@@ -703,10 +704,14 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
       const teamId = sanitizeKey(teamName)
       const staged = args.approval === 'required'
       const created = await withTeamLock(captainLockKey(stateRoot, captain.id), async () => {
-        const current = await findTeamByParticipant(stateRoot, captain.id)
-        if (current !== undefined) {
-          const relationship = current.captainSessionId === captain.id ? 'lead' : 'belong to'
-          throw new Error(`you already ${relationship} team "${current.name}" — end or leave it before creating another`)
+        // Authoritative scan, not the reverse-index cache: the index can
+        // drift (restart, crash, hand edit) and silently waive the
+        // one-active-team-per-captain invariant.
+        const current = await listTeamsForParticipant(stateRoot, captain.id)
+        if (current.length > 0) {
+          const names = current.map((team) => team.name).join('", "')
+          const relationship = current[0]?.captainSessionId === captain.id ? 'lead' : 'belong to'
+          throw new Error(`you already ${relationship} team "${names}" — end or leave it before creating another`)
         }
         return withTeamLock(teamLockKey(stateRoot, teamId), async () => {
           const existing = await readTeam(stateRoot, teamId)

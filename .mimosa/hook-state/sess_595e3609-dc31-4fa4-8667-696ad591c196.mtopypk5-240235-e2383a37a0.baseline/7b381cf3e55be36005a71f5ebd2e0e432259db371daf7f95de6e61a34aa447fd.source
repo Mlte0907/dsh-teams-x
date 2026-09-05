@@ -115,6 +115,7 @@ export interface TeamsXRuntime {
   updateStagedPlan(captain: Agent, teamId: string, mutation: StagedPlanMutation, signal?: AbortSignal): Promise<TeamState>
   updateStagedPlanBatch(captain: Agent, teamId: string, mutations: readonly StagedPlanMutation[], signal?: AbortSignal): Promise<TeamState>
   approveStagedTeam(captain: Agent, teamId: string, signal?: AbortSignal): Promise<{ teamId: string; members: number; tasks: number }>
+  continueStagedPlanning(captain: Agent, teamId: string): Promise<{ teamId: string; alreadyWaiting: boolean }>
   discardStagedTeam(captain: Agent, teamId: string): Promise<{ teamId: string }>
 }
 
@@ -403,6 +404,16 @@ export function stagedPlanDiscardContext(teamName: string): string {
   ].join('\n')
 }
 
+/** Context queued when the user returns a staged plan to chat for revision. */
+export function stagedPlanFeedbackContext(teamName: string): string {
+  return [
+    `The user selected "return to chat and revise" for the staged TeamsX plan "${teamName}".`,
+    'The existing staged plan is still the only draft. Do not create a replacement team, approve it, spawn members, or start work in this turn.',
+    'Ask the user one concise question about what should change, then stop and wait for their answer.',
+    'After the user answers, revise this same staged roster and DAG with one atomic teamsx_edit_plan call, summarize the revision, and wait for review again.',
+  ].join('\n')
+}
+
 /**
  * Register every `teamsx_*` tool into the shared tools registry.
  * @param ctx - the plugin context (injects `tools`).
@@ -576,6 +587,45 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
     return approved
   }
 
+  const continueStagedPlanning: TeamsXRuntime['continueStagedPlanning'] = async (captain, teamId) => {
+    const workspace = workspaceOf(captain)
+    const stateRoot = stateRootOf(workspace, config)
+    const prepared = await withTeamLock(teamLockKey(stateRoot, teamId), async () => {
+      const fresh = await requireFreshCaptainTeam(stateRoot, teamId, captain.id)
+      requireStagedTeam(fresh)
+      if (fresh.planReviewState === 'awaiting_feedback') {
+        return { teamName: fresh.name, alreadyWaiting: true }
+      }
+      fresh.planReviewState = 'awaiting_feedback'
+      await writeTeam(stateRoot, fresh)
+      return { teamName: fresh.name, alreadyWaiting: false }
+    })
+    if (prepared.alreadyWaiting) return { teamId, alreadyWaiting: true }
+
+    // End any planning turn still producing tool calls; the follow-up hint is
+    // queued as the next turn so it cannot race ahead and recreate the team.
+    captain.cancel({ kind: 'user' }, { keepInbox: true })
+    try {
+      captain.followup(createUserMessage({
+        content: [{ type: 'text', text: stagedPlanFeedbackContext(prepared.teamName) }],
+        source: { kind: 'plugin', plugin: 'dsh-teams-x' },
+      }))
+    } catch (error: unknown) {
+      // Do not leave the durable UI in a false waiting state when the live
+      // captain disappeared between lookup and delivery.
+      await withTeamLock(teamLockKey(stateRoot, teamId), async () => {
+        const fresh = await requireFreshCaptainTeam(stateRoot, teamId, captain.id)
+        requireStagedTeam(fresh)
+        if (fresh.planReviewState === 'awaiting_feedback') {
+          fresh.planReviewState = 'awaiting_review'
+          await writeTeam(stateRoot, fresh)
+        }
+      })
+      throw error
+    }
+    return { teamId, alreadyWaiting: false }
+  }
+
   const discardStagedTeam: TeamsXRuntime['discardStagedTeam'] = async (captain, teamId) => {
     const workspace = workspaceOf(captain)
     const stateRoot = stateRootOf(workspace, config)
@@ -609,6 +659,7 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
     updateStagedPlan,
     updateStagedPlanBatch,
     approveStagedTeam,
+    continueStagedPlanning,
     discardStagedTeam,
   }
 

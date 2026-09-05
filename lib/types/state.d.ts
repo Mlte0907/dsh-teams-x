@@ -71,6 +71,13 @@ export declare function readTeam(stateRoot: string, teamId: string): Promise<Tea
 /** Synchronously read one team record while a continuable child is composed. */
 export declare function readTeamSync(stateRoot: string, teamId: string): TeamState | undefined;
 /**
+ * Authoritative scan: return EVERY team in the state root the session
+ * participates in (captain or member), bypassing the reverse index. The
+ * index is a cache and can drift (crash, restart, hand edit) — invariant
+ * checks like "one active team per captain" must never trust it.
+ */
+export declare function listTeamsForParticipant(stateRoot: string, agentSessionId: string): Promise<TeamState[]>;
+/**
  * Find the team in which one session is an active participant, via the
  * reverse index with a self-healing full-scan fallback.
  * @param stateRoot - resolved absolute state root directory.

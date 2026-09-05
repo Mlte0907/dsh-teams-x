@@ -129,7 +129,7 @@ export function apply(ctx: Context, config: Config): void {
     text: () => usageSectionText(toolNames),
   })
 
-  registerTeamsXTools(ctx, resolved)
+  const teamsXRuntime = registerTeamsXTools(ctx, resolved)
 
   // The activity panel data/halt routes need the Web server and the workspace
   // registry, which headless profiles do not mount; under concurrent
@@ -290,6 +290,92 @@ export function apply(ctx: Context, config: Config): void {
         }
       },
     }), 'teams-x: member pause route')
+
+    // Staged-plan review surface: approve / discard / return-to-chat. Approve
+    // spawns every member and can take a while; the panel keeps a busy state
+    // until the next snapshot flips the team to running.
+    ctx.effect(() => webServer.register({
+      kind: 'exact',
+      path: '/plugins/dsh-teams-x/plan',
+      handler: async (req, res) => {
+        if (req.method !== 'POST') {
+          res.writeHead(405, { allow: 'POST', 'cache-control': 'no-store' })
+          res.end()
+          return
+        }
+        let payload: Record<string, unknown>
+        try {
+          const chunks: Buffer[] = []
+          let size = 0
+          const raw = await new Promise<string>((resolve, reject) => {
+            req.on('data', (chunk) => {
+              const part = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)
+              size += part.length
+              if (size > 1_000_000) {
+                reject(new Error('request body is too large'))
+                return
+              }
+              chunks.push(part)
+            })
+            req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+            req.on('error', reject)
+          })
+          const parsed: unknown = raw.trim() === '' ? {} : JSON.parse(raw)
+          if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) throw new Error('body must be an object')
+          payload = parsed as Record<string, unknown>
+        } catch (error: unknown) {
+          res.writeHead(400, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+          res.end(JSON.stringify({ error: error instanceof Error ? error.message : 'invalid request body' }))
+          return
+        }
+        const sessionId = typeof payload['sessionId'] === 'string' ? payload['sessionId'].trim() : ''
+        const teamId = typeof payload['teamId'] === 'string' ? payload['teamId'].trim() : ''
+        const action = typeof payload['action'] === 'string' ? payload['action'] : ''
+        if (sessionId === '' || teamId === '' || action === '') {
+          res.writeHead(400, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+          res.end(JSON.stringify({ error: 'sessionId, teamId, and action are required' }))
+          return
+        }
+        const captain = ctx.agents.get(sessionId as SessionId)
+        if (captain === undefined) {
+          res.writeHead(409, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+          res.end(JSON.stringify({ error: 'captain session is not attached' }))
+          return
+        }
+        const stateRoot = join(captain.session.header.cwd ?? process.cwd(), resolved.stateDir)
+        const team = await findTeamByCaptain(stateRoot, captain.id)
+        if (team === undefined || team.id !== teamId) {
+          res.writeHead(404, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+          res.end(JSON.stringify({ error: 'team not found for this captain' }))
+          return
+        }
+        try {
+          if (action === 'approve') {
+            const approved = await teamsXRuntime.approveStagedTeam(captain, teamId)
+            res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+            res.end(JSON.stringify({ ok: true, phase: 'running', ...approved }))
+            return
+          }
+          if (action === 'continue') {
+            const continued = await teamsXRuntime.continueStagedPlanning(captain, teamId)
+            res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+            res.end(JSON.stringify({ ok: true, phase: 'staged', review: 'awaiting_feedback', ...continued }))
+            return
+          }
+          if (action === 'discard') {
+            const discarded = await teamsXRuntime.discardStagedTeam(captain, teamId)
+            res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+            res.end(JSON.stringify({ ok: true, phase: 'archived', ...discarded }))
+            return
+          }
+          throw new Error(`unknown plan action "${action}"`)
+        } catch (error: unknown) {
+          ctx.logger.warn(`teams-x: plan ${action} failed for ${teamId}: ${String(error)}`)
+          res.writeHead(409, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+          res.end(JSON.stringify({ error: error instanceof Error ? error.message : 'plan action failed' }))
+        }
+      },
+    }), 'teams-x: plan review route')
   }
 
   registerWebSurface()

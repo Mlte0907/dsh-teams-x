@@ -13,7 +13,7 @@ const state = await import(join(root, 'lib', 'state.js'))
 const {
   readTeam, findTeamByParticipant, createTeamDir, stateRootDiagnostics,
   beginTaskAttempt, unsatisfiedDependencies, withTeamLock, writeTeam,
-  appendMailbox, readUnreadMailbox, CAPTAIN_KEY,
+  appendMailbox, readUnreadMailbox, CAPTAIN_KEY, listTeamsForParticipant,
 } = state
 
 let failures = 0
@@ -95,6 +95,11 @@ try {
   })
   const unread = await readUnreadMailbox(sandbox, 'flow-test', CAPTAIN_KEY)
   check('mailbox roundtrip', unread.length === 1 && unread[0].content === 'report')
+
+  // one-team-per-captain invariant via the authoritative scan (the same
+  // check teamsx_create runs): the captain already leads flow-test.
+  const duplicates = await listTeamsForParticipant(sandbox, captainId)
+  check('invariant scan finds the existing team', duplicates.length === 1 && duplicates[0].id === 'flow-test')
 
   // hand-edit tolerance: simulate the exact field the test report tripped on
   const raw = JSON.parse(await import('node:fs/promises').then(fs => fs.readFile(join(sandbox, 'flow-test', 'team.json'), 'utf8')))

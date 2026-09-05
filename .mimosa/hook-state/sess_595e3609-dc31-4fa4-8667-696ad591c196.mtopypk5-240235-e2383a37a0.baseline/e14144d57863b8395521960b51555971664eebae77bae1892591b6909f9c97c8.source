@@ -69,6 +69,10 @@ export interface TeamsXRuntime {
         members: number;
         tasks: number;
     }>;
+    continueStagedPlanning(captain: Agent, teamId: string): Promise<{
+        teamId: string;
+        alreadyWaiting: boolean;
+    }>;
     discardStagedTeam(captain: Agent, teamId: string): Promise<{
         teamId: string;
     }>;
@@ -86,6 +90,8 @@ export declare function haltTeamWork(input: {
 }>;
 /** Context queued after the human rejects a staged plan. */
 export declare function stagedPlanDiscardContext(teamName: string): string;
+/** Context queued when the user returns a staged plan to chat for revision. */
+export declare function stagedPlanFeedbackContext(teamName: string): string;
 /**
  * Register every `teamsx_*` tool into the shared tools registry.
  * @param ctx - the plugin context (injects `tools`).

@@ -37,6 +37,7 @@
     },
     "client": {
       "inject": [
+        "@deepseek-ai/dsh-api-session-controller",
         "@deepseek-ai/dsh-client-locale",
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-renderer"
@@ -50,7 +51,8 @@
     "smoke:client": "node --import ./scripts/register-css-stub.mjs scripts/client-smoke.mjs",
     "verify:flow": "node --experimental-strip-types scripts/verify-flow.mjs",
     "icons": "node --experimental-strip-types scripts/export-icons.mjs",
-    "verify:icons": "node --experimental-strip-types scripts/export-icons.mjs --check"
+    "verify:icons": "node --experimental-strip-types scripts/export-icons.mjs --check",
+    "verify": "pnpm typecheck && pnpm build && pnpm smoke:client && pnpm verify:flow && pnpm verify:icons"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",
@@ -112,6 +114,7 @@
     "@deepseek-ai/cordis": "link:/home/xiaoxin/deepseek-harness/vendor/cordis",
     "@deepseek-ai/dsh-agent": "link:/home/xiaoxin/deepseek-harness/packages/core/agent",
     "@deepseek-ai/dsh-client-connection": "link:/home/xiaoxin/deepseek-harness/packages/client/connection",
+    "@deepseek-ai/dsh-api-session-controller": "link:/home/xiaoxin/deepseek-harness/packages/api/session-controller",
     "@deepseek-ai/dsh-client-locale": "link:/home/xiaoxin/deepseek-harness/packages/client/locale",
     "@deepseek-ai/dsh-client-ui-conversation": "link:/home/xiaoxin/deepseek-harness/packages/client/ui-conversation",
     "@deepseek-ai/dsh-client-ui-layout": "link:/home/xiaoxin/deepseek-harness/packages/client/ui-layout",
