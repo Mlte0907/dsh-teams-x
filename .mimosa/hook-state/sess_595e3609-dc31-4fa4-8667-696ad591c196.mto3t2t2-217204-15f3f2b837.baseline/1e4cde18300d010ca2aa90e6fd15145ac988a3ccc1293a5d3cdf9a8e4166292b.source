@@ -27,15 +27,12 @@ function format(template, params) {
 function makeT(t) {
     return (key, params) => format(t(key, params), params);
 }
-/** Poll the state endpoint: once on mount, then on an interval ONLY while expanded. */
-function useTeamSnapshots(expanded) {
+/** Poll the state endpoint on an interval while mounted. */
+function useTeamSnapshots() {
     const [teams, setTeams] = useState([]);
     const [error, setError] = useState(undefined);
     const [tick, setTick] = useState(0);
     useEffect(() => {
-        // Collapsed: one discovery fetch only, no recurring background activity.
-        if (!expanded && tick > 0)
-            return;
         let disposed = false;
         const load = async () => {
             try {
@@ -54,14 +51,12 @@ function useTeamSnapshots(expanded) {
             }
         };
         void load();
-        if (!expanded)
-            return () => { disposed = true; };
         const timer = window.setInterval(() => { void load(); }, POLL_INTERVAL_MS);
         return () => {
             disposed = true;
             window.clearInterval(timer);
         };
-    }, [expanded, tick]);
+    }, [tick]);
     return { teams, error, reload: () => setTick((value) => value + 1) };
 }
 /** POST the halt route for one team. */
@@ -122,20 +117,9 @@ function TeamCard({ team, t }) {
                         ? _jsx("p", { className: css.inboxEmpty, children: t('inbox.empty') })
                         : (_jsx("ul", { className: css.inboxList, children: team.captainInbox.map((message, index) => (_jsxs("li", { className: css.inboxItem, children: [_jsx("span", { className: css.inboxFrom, children: message.from }), _jsx("span", { className: css.inboxContent, children: message.content })] }, `${message.from}-${index}`))) }))] })] }));
 }
-/** The panel shell: a collapsed floating badge by default; expanded on click. */
+/** The panel shell: poll state, list team cards. */
 export function ActivityPanel({ t }) {
     const translate = useMemo(() => makeT(t), [t]);
-    // Collapsed by default: the shell.overlay layer covers the whole app, so
-    // this component must occupy nothing until the user opens it.
-    const [expanded, setExpanded] = useState(false);
-    const { teams, error, reload } = useTeamSnapshots(expanded);
-    const activeTeams = teams.filter((team) => team.halted !== true);
-    const workingCount = activeTeams.reduce((count, team) => (count + team.members.filter((member) => member.activity === 'working').length), 0);
-    if (!expanded) {
-        // No teams and no error: render nothing at all into the overlay layer.
-        if (teams.length === 0 && error === undefined)
-            return null;
-        return (_jsxs("button", { type: 'button', className: css.badgeFab, onClick: () => { setExpanded(true); }, "aria-label": translate('panel.aria'), title: translate('panel.title'), children: [_jsx(TeamsXLogo, { size: 16 }), _jsx("span", { className: css.badgeFabCount, children: teams.length }), workingCount > 0 && _jsx("span", { className: css.badgeFabBusy, "data-busy": true, children: workingCount })] }));
-    }
-    return (_jsxs("div", { className: css.panelWindow, role: 'region', "aria-label": translate('panel.aria'), children: [_jsxs("header", { className: css.panelHeader, children: [_jsxs("h2", { className: css.panelTitle, children: [_jsx(TeamsXLogo, { size: 18 }), " ", translate('panel.title')] }), _jsx("button", { type: 'button', className: css.refreshButton, onClick: reload, "aria-label": translate('panel.refresh'), children: _jsx("span", { className: css.animSpin, children: "\u27F3" }) }), _jsx("button", { type: 'button', className: css.refreshButton, onClick: () => { setExpanded(false); }, "aria-label": translate('panel.refresh'), children: "\u2715" })] }), error !== undefined && _jsx("p", { className: css.panelError, children: translate('panel.error', { message: error }) }), error === undefined && teams.length === 0 && (_jsx("p", { className: css.panelEmpty, children: translate('panel.empty') })), _jsx("div", { className: css.teamList, children: teams.map((team) => _jsx(TeamCard, { team: team, t: translate }, `${team.workspace}/${team.teamId}`)) })] }));
+    const { teams, error, reload } = useTeamSnapshots();
+    return (_jsxs("div", { className: css.panel, role: 'region', "aria-label": translate('panel.aria'), children: [_jsxs("header", { className: css.panelHeader, children: [_jsxs("h2", { className: css.panelTitle, children: [_jsx(TeamsXLogo, { size: 18 }), " ", translate('panel.title')] }), _jsx("button", { type: 'button', className: css.refreshButton, onClick: reload, "aria-label": translate('panel.refresh'), children: _jsx("span", { className: css.animSpin, children: "\u27F3" }) })] }), error !== undefined && _jsx("p", { className: css.panelError, children: translate('panel.error', { message: error }) }), error === undefined && teams.length === 0 && (_jsx("p", { className: css.panelEmpty, children: translate('panel.empty') })), _jsx("div", { className: css.teamList, children: teams.map((team) => _jsx(TeamCard, { team: team, t: translate }, `${team.workspace}/${team.teamId}`)) })] }));
 }

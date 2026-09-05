@@ -4,9 +4,73 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  height: 100%;
   overflow-y: auto;
   padding: 12px;
+  font-size: 13px;
+  color: var(--dsh-text, #1f2328);
+}
+
+/* Collapsed floating badge: the only thing this plugin mounts into the
+   full-screen shell.overlay layer while closed. Small, corner-pinned. */
+.badgeFab {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--dsh-border, #d0d7de);
+  background: var(--dsh-bg, #ffffff);
+  color: var(--dsh-accent, #5b4cf0);
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.14);
+  width: fit-content;
+  height: fit-content;
+}
+
+.badgeFab:hover {
+  border-color: var(--dsh-accent, #5b4cf0);
+}
+
+.badgeFabCount {
+  color: var(--dsh-text, #1f2328);
+  font-weight: 600;
+}
+
+.badgeFabBusy {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--dsh-accent, #5b4cf0);
+  color: #fff;
+  font-size: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  animation: teamsx-pulse 1.6s ease-in-out infinite;
+}
+
+/* Expanded panel window: fixed-size floating card, never full-screen. */
+.panelWindow {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  width: 400px;
+  max-width: calc(100vw - 32px);
+  max-height: min(72vh, 640px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--dsh-border, #d0d7de);
+  border-radius: 12px;
+  background: var(--dsh-bg, #ffffff);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.18);
   font-size: 13px;
   color: var(--dsh-text, #1f2328);
 }
