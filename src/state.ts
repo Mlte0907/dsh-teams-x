@@ -195,11 +195,18 @@ async function readIndex(stateRoot: string): Promise<TeamsIndex | undefined> {
 
 /**
  * Add one team's identities to the reverse index under the state-root lock.
- * Read-modify-write of the whole index keeps concurrent team creations safe.
+ * The team's previous entries are dropped first, so re-indexing a team whose
+ * identity set shrank (member removed) never leaves stale sessions behind.
  */
 async function indexTeam(stateRoot: string, state: TeamState): Promise<void> {
   await withTeamLock(`index:${stateRoot}`, async () => {
     const index = (await readIndex(stateRoot)) ?? emptyIndex()
+    for (const key of Object.keys(index.captains)) {
+      if (index.captains[key] === state.id) delete index.captains[key]
+    }
+    for (const key of Object.keys(index.members)) {
+      if (index.members[key] === state.id) delete index.members[key]
+    }
     const member = indexMemberOf(state)
     Object.assign(index.captains, member.captains)
     Object.assign(index.members, member.members)
@@ -628,7 +635,18 @@ export async function findTeamByParticipant(
       const participates = team !== undefined
         && (team.captainSessionId === agentSessionId
           || team.members.some((member) => member.id === agentSessionId && member.status !== 'removed'))
-      if (participates) return team
+      if (participates) {
+        // Ambiguity defense on the hot path too: the index collapses one
+        // session to a single team id, so a hand-edited state that made the
+        // session participate in a second team is invisible here. The
+        // authoritative scan keeps a silent wrong-team pick from happening.
+        const all = await listTeamsForParticipant(stateRoot, agentSessionId)
+        if (all.length > 1) {
+          const ids = all.map((entry) => entry.id).sort().join('", "')
+          throw new Error(`agent session belongs to multiple active teams ("${ids}"); the target team is ambiguous`)
+        }
+        return team
+      }
     } else {
       const scanned = await scanForParticipant(stateRoot, agentSessionId)
       // Only pay for a rebuild when the scan found something the index missed.
@@ -669,7 +687,12 @@ export async function removeTeamDir(stateRoot: string, teamId: string): Promise<
 export async function archiveTeamDir(stateRoot: string, teamId: string): Promise<void> {
   const archiveRoot = join(stateRoot, 'archive')
   await mkdir(archiveRoot, { recursive: true })
-  await renameWithRetry(join(stateRoot, teamId), join(archiveRoot, teamId))
+  const destination = join(archiveRoot, teamId)
+  // Archive-over-archive is a supported path (delete → recreate the same
+  // name → delete again): drop the previous generation instead of failing
+  // the rename with ENOTEMPTY and bricking the live team.
+  await rm(destination, { recursive: true, force: true })
+  await renameWithRetry(join(stateRoot, teamId), destination)
   await unindexTeam(stateRoot, teamId)
 }
 

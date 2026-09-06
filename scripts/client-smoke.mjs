@@ -23,6 +23,7 @@ globalThis.window = {
   setInterval: () => 0,
   clearInterval: () => {},
   localStorage: { getItem: () => null, setItem: () => {} },
+  matchMedia: () => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} }),
 }
 globalThis.document = undefined // absent like pre-DOM; bundle guards on it
 globalThis.fetch = async () => ({ ok: true, json: async () => ({ teams: [] }) })
