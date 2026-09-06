@@ -16,6 +16,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
         teamsX: TeamsXLocaleKey;
     }
 }
-/** Required services: slots (mount point), locale (dictionaries), sessions (member transcript navigation). */
+/** Required services: slots (mount point), locale (dictionaries), sessions (member transcript navigation), uiConversation (card registration). */
 export declare const inject: string[];
 export declare function apply(ctx: ClientContext): void;

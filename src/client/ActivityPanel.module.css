@@ -643,6 +643,12 @@
   flex: 1;
   border-left: 2px solid;
   border-radius: 0 0 0 2px;
+  animation: lane-enter 300ms ease both;
+}
+
+@keyframes lane-enter {
+  from { opacity: 0; transform: scaleY(0.6); }
+  to { opacity: 1; transform: scaleY(1); }
 }
 
 .taskLaneSegment[data-depth="0"] { border-left-color: var(--dsw-alias-state-business-primary, #679efe); }

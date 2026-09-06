@@ -1,14 +1,14 @@
 {
   "schemaVersion": "mimosa-hook-status/v1",
-  "recordedAt": "2026-09-06T06:45:21.636Z",
+  "recordedAt": "2026-09-06T11:17:44.583Z",
   "sessionId": "sess_595e3609-dc31-4fa4-8667-696ad591c196",
   "event": "PostToolUse",
-  "toolName": "Write",
-  "file": "/home/xiaoxin/.teams-x/archive/dag-demo/team.json",
+  "toolName": "Edit",
+  "file": "src/client/index.tsx",
   "outcome": "clear",
   "coverage": "complete",
   "findingCount": 0,
-  "durationMs": 5,
+  "durationMs": 17,
   "hostState": "hook_complete",
   "reportHint": ".mimosa/reports/"
 }

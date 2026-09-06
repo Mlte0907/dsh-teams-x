@@ -30,8 +30,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** Required services: slots (mount point), locale (dictionaries), sessions (member transcript navigation). */
-export const inject = ['slots', 'locale', 'sessions']
+/** Required services: slots (mount point), locale (dictionaries), sessions (member transcript navigation), uiConversation (card registration). */
+export const inject = ['slots', 'locale', 'sessions', 'uiConversation']
 
 export function apply(ctx: ClientContext): void {
   ctx.effect(
