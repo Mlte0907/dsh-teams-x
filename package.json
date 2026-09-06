@@ -52,6 +52,8 @@
     "verify:flow": "node --experimental-strip-types scripts/verify-flow.mjs",
     "icons": "node --experimental-strip-types scripts/export-icons.mjs",
     "verify:icons": "node --experimental-strip-types scripts/export-icons.mjs --check",
+    "prepublishOnly": "pnpm build && pnpm smoke:client && node scripts/prepublish-guard.mjs",
+    "postinstall": "node scripts/postinstall-check.mjs",
     "verify": "pnpm typecheck && pnpm build && pnpm smoke:client && pnpm verify:flow && node scripts/full-functional-test.mjs && pnpm verify:icons"
   },
   "peerDependencies": {
