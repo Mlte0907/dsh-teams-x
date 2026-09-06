@@ -248,9 +248,30 @@
   line-height: 1.4;
 }
 
+.errorBox {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .panelError {
   color: var(--dsw-alias-state-error-primary, #f25a5a);
-  padding: 8px;
+}
+
+.retryButton {
+  border: 1px solid var(--dsw-alias-state-error-primary, #f25a5a);
+  background: transparent;
+  color: var(--dsw-alias-state-error-primary, #f25a5a);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.retryButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover-danger, rgba(242, 90, 90, 0.15));
 }
 
 .teamList {
