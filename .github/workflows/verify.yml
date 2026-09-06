@@ -54,7 +54,11 @@ jobs:
           node -e "console.log(require.resolve('@deepseek-ai/cordis'))" | head -2
 
       - name: Install plugin dependencies
-        run: pnpm install --frozen-lockfile
+        run: |
+          pnpm --version
+          pnpm install --no-frozen-lockfile
+          ls -la node_modules/ | head -12
+          ls node_modules/@deepseek-ai/ | head -20
 
       - name: Verify (typecheck + build + smoke + flow + functional suite + icons)
         run: pnpm verify
