@@ -38,6 +38,21 @@ jobs:
         working-directory: deepseek-harness
         run: npm run build:lib:host
 
+      # vendor/cordis is not part of build:lib:host and its lib/ is untracked;
+      # build it explicitly so the linked @deepseek-ai/cordis resolves.
+      - name: Build vendor cordis
+        working-directory: deepseek-harness/vendor/cordis
+        run: |
+          npm install --no-save
+          npx tsc -b tsconfig.json
+
+      - name: Diagnose linked packages
+        run: |
+          ls node_modules/@deepseek-ai/ | head -20
+          ls deepseek-harness/vendor/cordis/lib | head -5
+          ls deepseek-harness/packages/core/agent/lib | head -5
+          node -e "console.log(require.resolve('@deepseek-ai/cordis'))" | head -2
+
       - name: Install plugin dependencies
         run: pnpm install --frozen-lockfile
 
