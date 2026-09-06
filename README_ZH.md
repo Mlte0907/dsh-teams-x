@@ -11,7 +11,7 @@
 ## 安装（本地路径）
 
 ```sh
-dsh plugin --profile web add /home/xiaoxin/dsh-teams-x
+dsh plugin --profile web add <path-to-dsh-teams-x>
 ```
 
 profile 支持 `patchReload: live`，改完源码执行 `pnpm build` 后重启宿主即可生效。真实实例验证（工具注册、成员生成、调度、面板轮询）由使用者执行。

@@ -1,9 +1,10 @@
 /**
  * End-to-end verification against the REAL test state on disk
- * (/home/xiaoxin/.teams-x) plus a fresh full-flow exercise in a temp dir.
+ * (the home state root) plus a fresh full-flow exercise in a temp dir.
  * Run after building: node scripts/verify-flow.mjs
  */
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises'
+import { homedir } from 'node:os'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -26,7 +27,7 @@ const check = (name, condition, detail = '') => {
 // The real clean-test team may have been archived in a prior session.
 // If absent, skip the real-team checks gracefully (the sandbox section
 // proves the same code path on fresh data).
-const realRoot = '/home/xiaoxin/.teams-x'
+const realRoot = join(homedir(), '.teams-x')
 const real = await readTeam(realRoot, 'clean-test').catch(() => undefined)
 if (real === undefined) {
   console.log('  (real team clean-test not present — skipped; sandbox covers the same code path)')

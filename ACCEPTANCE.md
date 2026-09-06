@@ -10,7 +10,7 @@
 ## 一、自动化验收（已全部通过）
 
 ```sh
-cd /home/xiaoxin/dsh-teams-x
+cd <path-to-dsh-teams-x>
 pnpm verify          # typecheck + build + smoke:client + verify:flow + verify:icons
 pnpm smoke:client    # DOM 渲染级烟雾测试
 pnpm verify:flow     # 状态层全流程（真实数据 + 沙盒 + 不变量）
@@ -36,7 +36,7 @@ pnpm verify:flow     # 状态层全流程（真实数据 + 沙盒 + 不变量）
 
 | # | 步骤 | 预期 | ☐/☑ |
 |---|------|------|------|
-| 1 | `dsh plugin --profile web add /home/xiaoxin/dsh-teams-x` | 安装成功，无 peer dep 冲突 | ☐ |
+| 1 | `dsh plugin --profile web add <path-to-dsh-teams-x>` | 安装成功，无 peer dep 冲突 | ☐ |
 | 2 | 重启后端 (`pkill -f "bin.js web"`) | restarter 自动拉起新进程，`dsh web:` 行出现 | ☐ |
 | 3 | 浏览器打开 `http://127.0.0.1:3080/?token=...` | 页面加载，无 JS 控制台报错 | ☐ |
 | 4 | 打开任意会话 → 标题栏检查 | 若会话有 TeamsX 队伍 → 蓝色徽标可见；若无 → 标题栏无 TeamsX 元素 | ☐ |
@@ -131,7 +131,7 @@ pnpm verify:flow     # 状态层全流程（真实数据 + 沙盒 + 不变量）
 
 ```sh
 # 一键全量回归（含类型检查、构建、烟雾测试、状态流验证、图标校验）
-cd /home/xiaoxin/dsh-teams-x && pnpm verify
+cd <path-to-dsh-teams-x> && pnpm verify
 
 # 单独运行各模块
 pnpm typecheck        # 类型检查
