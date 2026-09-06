@@ -97,10 +97,24 @@ function useTeamData(expanded, viewMode) {
     return { teams, error, loading, reload: () => setTick((value) => value + 1) };
 }
 /**
- * Place the expanded panel as a dropdown under the badge, cleared below the
- * session tab bar. Placement runs ONCE on open (plus on resize): no periodic
- * re-probing, so the panel never visibly jumps after settling. The one-shot
- * horizontal probe still dodges a higher-layer dock that would cover it.
+ * Detect narrow viewports (mobile web / remote): the expanded panel renders
+ * as a full-width bottom sheet instead of a badge-anchored dropdown.
+ */
+function useIsNarrow() {
+    const [isNarrow, setIsNarrow] = useState(() => window.matchMedia('(max-width: 720px)').matches);
+    useEffect(() => {
+        const mq = window.matchMedia('(max-width: 720px)');
+        const onChange = (e) => { setIsNarrow(e.matches); };
+        mq.addEventListener('change', onChange);
+        return () => { mq.removeEventListener('change', onChange); };
+    }, []);
+    return isNarrow;
+}
+/**
+ * Place the expanded panel under the badge, cleared below the session tab
+ * bar. Placement runs ONCE on open (plus on resize): no periodic re-probing,
+ * so the panel never visibly jumps after settling. The one-shot horizontal
+ * probe still dodges a higher-layer dock that would cover it.
  */
 function usePanelPlacement(badgeRef, panelRef, expanded) {
     const [pos, setPos] = useState({ top: 96, right: 18 });
@@ -280,6 +294,7 @@ export function ActivityPanel({ sessionId, t, openMember }) {
     const [hasArchived, setHasArchived] = useState(false);
     const badgeRef = useRef(null);
     const panelRef = useRef(null);
+    const isNarrow = useIsNarrow();
     const { teams, error, loading, reload } = useTeamData(expanded, viewMode);
     // One-shot: if archived teams exist for this session, show the badge
     // even when no live teams exist — the user can browse archive history.
@@ -299,7 +314,7 @@ export function ActivityPanel({ sessionId, t, openMember }) {
     const sessionTeams = useMemo(() => teams.filter((team) => (team.captainSessionId === sessionId
         || team.members.some((member) => member.id === sessionId))), [teams, sessionId]);
     const workingCount = sessionTeams.reduce((count, team) => (count + team.members.filter((member) => member.activity === 'working').length), 0);
-    const placement = usePanelPlacement(badgeRef, panelRef, expanded);
+    const placement = usePanelPlacement(badgeRef, panelRef, expanded && !isNarrow);
     // Drop the panel on any pointer outside badge + panel, matching the
     // subagent-count dropdown's dismiss behavior.
     useEffect(() => {
@@ -329,11 +344,8 @@ export function ActivityPanel({ sessionId, t, openMember }) {
     const badge = (_jsxs("button", { type: 'button', ref: badgeRef, className: css.badgeFab, "data-expanded": expanded === true || undefined, onClick: () => { setExpanded((value) => !value); }, "aria-label": translate('panel.aria'), "aria-expanded": expanded === true || undefined, title: translate('panel.title'), children: [_jsx(TeamsXLogo, { size: 14, decorative: true }), _jsx("span", { className: css.badgeFabCount, children: sessionTeams.length }), workingCount > 0 && _jsx("span", { className: css.badgeFabBusy, "data-busy": true, children: workingCount })] }));
     if (!expanded)
         return badge;
-    return (_jsxs(_Fragment, { children: [badge, createPortal(_jsxs("div", { className: css.panelWindow, ref: panelRef, style: {
+    return (_jsxs(_Fragment, { children: [badge, createPortal(_jsxs("div", { className: isNarrow ? css.panelSheet : css.panelWindow, ref: panelRef, style: isNarrow ? undefined : {
                     top: `${placement.top}px`,
                     right: `${placement.right}px`,
-                    // Viewport clamp: on narrow screens (mobile remote view) a large
-                    // right offset must never push the panel past the left edge.
-                    maxWidth: `${Math.max(280, window.innerWidth - placement.right - 16)}px`,
                 }, role: 'region', "aria-label": translate('panel.aria'), children: [_jsxs("header", { className: css.panelHeader, children: [_jsxs("h2", { className: css.panelTitle, children: [_jsx(TeamsXLogo, { size: 18, decorative: true }), " ", translate('panel.title')] }), _jsxs("div", { className: css.panelActions, children: [_jsxs("div", { className: css.modeToggle, role: 'radiogroup', "aria-label": translate('panel.live'), children: [_jsx("button", { type: 'button', className: `${css.modeOption} ${viewMode === 'live' ? css.modeActive : ''}`, onClick: () => { setViewMode('live'); }, "aria-pressed": viewMode === 'live', children: translate('panel.live') }), _jsx("button", { type: 'button', className: `${css.modeOption} ${viewMode === 'archive' ? css.modeActive : ''}`, onClick: () => { setViewMode('archive'); }, "aria-pressed": viewMode === 'archive', children: translate('panel.archived') })] }), _jsx("button", { type: 'button', className: css.refreshButton, onClick: reload, "data-loading": loading === true || undefined, "aria-label": translate('panel.refresh'), title: translate('panel.refresh'), children: _jsx("span", { className: loading === true ? css.animSpin : undefined, children: "\u27F3" }) }), _jsx("button", { type: 'button', className: css.refreshButton, onClick: () => { setExpanded(false); }, "aria-label": translate('panel.close'), title: translate('panel.close'), children: "\u2715" })] })] }), error !== undefined && _jsx("p", { className: css.panelError, children: translate('panel.error', { message: error }) }), error === undefined && sessionTeams.length === 0 && (_jsx("p", { className: css.panelEmpty, children: translate('panel.empty') })), _jsx("div", { className: css.teamList, children: sessionTeams.map((team) => _jsx(TeamCard, { team: team, t: translate, openMember: openMember, readOnly: viewMode === 'archive' }, `${team.workspace}/${team.teamId}`)) })] }), document.body)] }));
 }

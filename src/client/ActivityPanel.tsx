@@ -293,7 +293,11 @@ function MemberRow({ member, team, t, openMember, readOnly }: {
         <span className={css.memberUnread} title={t('member.unread', { count: member.unread })}>{member.unread}</span>
       )}
       <span className={css.memberState}>
-        {ActivityIcon !== undefined && <ActivityIcon size={14} className={member.activity === 'working' ? css.animPulse : undefined} decorative />}
+        {ActivityIcon !== undefined && <ActivityIcon size={14} className={
+          member.activity === 'working' ? css.animPulse
+            : member.activity === 'idle' ? css.animThink
+              : undefined
+        } decorative />}
         {t(stateKey)}
         {!readOnly && member.activity === 'working' && (
           <button
@@ -312,7 +316,7 @@ function MemberRow({ member, team, t, openMember, readOnly }: {
   )
 }
 
-/** One task row of the DAG list, indented by dependency depth. */
+/** One task row of the DAG list, with depth strip, dependency tags, and status colors. */
 function TaskRow({ task, t }: { task: TeamActivitySnapshot['tasks'][number]; t: ReturnType<typeof makeT> }): ReactElement {
   const StateIcon = VISUAL_STATE_ICONS[task.state] as IconComponent | undefined
   const statusKey = `task.status.${task.status}` as TeamsXLocaleKey
@@ -321,10 +325,27 @@ function TaskRow({ task, t }: { task: TeamActivitySnapshot['tasks'][number]; t: 
     : task.assignee === 'captain' ? t('task.assignee.captain')
       : task.assignee
   return (
-    <div className={css.taskRow} data-state={task.state} style={{ marginInlineStart: `${Math.min(task.depth, 4) * 18}px` }}>
+    <div className={css.taskRow} data-state={task.state} data-depth={task.depth}>
+      {/* Depth lane: a colored strip indicating the dependency level */}
+      {task.depth > 0 && (
+        <span className={css.taskLane} aria-hidden>
+          {Array.from({ length: Math.min(task.depth, 4) }, (_, i) => (
+            <span key={i} className={css.taskLaneSegment} data-depth={i} />
+          ))}
+        </span>
+      )}
       <span className={css.taskIcon}>{StateIcon !== undefined && <StateIcon size={14} className={task.state === 'running' ? css.animPulse : undefined} decorative />}</span>
       <span className={css.taskId}>{task.id}</span>
-      <span className={css.taskSubject} title={task.description || task.subject}>{task.subject}</span>
+      <span className={css.taskSubject} title={task.description || task.subject}>
+        {task.subject}
+        {task.dependencies.length > 0 && (
+          <span className={css.taskDepList}>
+            {task.dependencies.map((dep) => (
+              <span key={dep} className={css.taskDepTag}>{dep}</span>
+            ))}
+          </span>
+        )}
+      </span>
       <span className={css.taskAssignee}>{assignee}</span>
       <span className={css.taskStatus} title={t(visualKey)}>{t(statusKey)}</span>
     </div>
@@ -637,9 +658,12 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
             </div>
           </header>
           {error !== undefined && <p className={css.panelError}>{translate('panel.error', { message: error })}</p>}
-          {error === undefined && sessionTeams.length === 0 && (
-            <p className={css.panelEmpty}>{translate('panel.empty')}</p>
-          )}
+      {error === undefined && sessionTeams.length === 0 && (
+        <div className={css.emptyState}>
+          <TeamsXLogo size={48} className={css.emptyLogo} />
+          <p className={css.panelEmpty}>{translate('panel.empty')}</p>
+        </div>
+      )}
           <div className={css.teamList}>
             {sessionTeams.map((team) => <TeamCard key={`${team.workspace}/${team.teamId}`} team={team} t={translate} openMember={openMember} readOnly={viewMode === 'archive'} />)}
           </div>
