@@ -14,6 +14,12 @@
 dsh plugin --profile web add <path-to-dsh-teams-x>
 ```
 
+## 安装（npm）
+
+```sh
+npm i dsh-teams-x    # 已发布到 npm(或按上文从源码构建)
+```
+
 profile 支持 `patchReload: live`，改完源码执行 `pnpm build` 后重启宿主即可生效。真实实例验证（工具注册、成员生成、调度、面板轮询）由使用者执行。
 
 ## 从源码构建
