@@ -8,7 +8,7 @@
 # and reconciles it into the profile's `dsh.profile.bundles` layer list.
 #
 # Tool namespace is `teamsx_*` and the state dir is `.teams-x`, so this plugin
-# can coexist with the original agent-teams plugin for comparison.
+# stays isolated from any other team-mode plugins that may be mounted.
 - insert:
     - id: teams-x
       # Node-resolvable package name — must stay in sync with package.json `name`.

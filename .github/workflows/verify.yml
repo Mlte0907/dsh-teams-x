@@ -1,0 +1,45 @@
+name: verify
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      # The devDependencies link into a DeepSeek Harness checkout that sits
+      # next to this repository (link:../deepseek-harness/...), so check it
+      # out at the same relative position and build the host libs it needs.
+      - uses: actions/checkout@v4
+        with:
+          repository: deepseek-ai/deepseek-harness
+          ref: main
+          path: deepseek-harness
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11.7.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install harness dependencies
+        working-directory: deepseek-harness
+        run: pnpm install --frozen-lockfile
+
+      - name: Build harness host libs
+        working-directory: deepseek-harness
+        run: npm run build:lib:host
+
+      - name: Install plugin dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify (typecheck + build + smoke + flow + functional suite + icons)
+        run: pnpm verify

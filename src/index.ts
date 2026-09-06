@@ -10,7 +10,7 @@
  * results.
  *
  * The state dir is `.teams-x` and the tool namespace is `teamsx_*`, so this
- * plugin coexists with the original agent-teams plugin for comparison.
+ * * state stays isolated from any other team-mode plugins that may be mounted.
  *
  * @module dsh-teams-x
  */

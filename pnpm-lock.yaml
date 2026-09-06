@@ -9,55 +9,55 @@ importers:
   .:
     devDependencies:
       '@deepseek-ai/cordis':
-        specifier: link:/home/xiaoxin/deepseek-harness/vendor/cordis
+        specifier: link:../deepseek-harness/vendor/cordis
         version: link:../deepseek-harness/vendor/cordis
       '@deepseek-ai/dsh-agent':
-        specifier: link:/home/xiaoxin/deepseek-harness/packages/core/agent
+        specifier: link:../deepseek-harness/packages/core/agent
         version: link:../deepseek-harness/packages/core/agent
       '@deepseek-ai/dsh-api-session-controller':
-        specifier: link:/home/xiaoxin/deepseek-harness/packages/api/session-controller
+        specifier: link:../deepseek-harness/packages/api/session-controller
         version: link:../deepseek-harness/packages/api/session-controller
       '@deepseek-ai/dsh-client-connection':
-        specifier: link:/home/xiaoxin/deepseek-harness/packages/client/connection
+        specifier: link:../deepseek-harness/packages/client/connection
         version: link:../deepseek-harness/packages/client/connection
       '@deepseek-ai/dsh-client-locale':
-        specifier: link:/home/xiaoxin/deepseek-harness/packages/client/locale
+        specifier: link:../deepseek-harness/packages/client/locale
         version: link:../deepseek-harness/packages/client/locale
       '@deepseek-ai/dsh-client-ui-conversation':
-        specifier: link:/home/xiaoxin/deepseek-harness/packages/client/ui-conversation
+        specifier: link:../deepseek-harness/packages/client/ui-conversation
         version: link:../deepseek-harness/packages/client/ui-conversation
       '@deepseek-ai/dsh-client-ui-layout':
-        specifier: link:/home/xiaoxin/deepseek-harness/packages/client/ui-layout
+        specifier: link:../deepseek-harness/packages/client/ui-layout
         version: link:../deepseek-harness/packages/client/ui-layout
       '@deepseek-ai/dsh-client-ui-renderer':
-        specifier: link:/home/xiaoxin/deepseek-harness/packages/client/ui-renderer
+        specifier: link:../deepseek-harness/packages/client/ui-renderer
         version: link:../deepseek-harness/packages/client/ui-renderer
       '@deepseek-ai/dsh-client-ui-session':
-        specifier: link:/home/xiaoxin/deepseek-harness/packages/client/ui-session
+        specifier: link:../deepseek-harness/packages/client/ui-session
         version: link:../deepseek-harness/packages/client/ui-session
       '@deepseek-ai/dsh-client-ui-slots':
-        specifier: link:/home/xiaoxin/deepseek-harness/packages/client/ui-slots
+        specifier: link:../deepseek-harness/packages/client/ui-slots
         version: link:../deepseek-harness/packages/client/ui-slots
       '@deepseek-ai/dsh-llm':
-        specifier: link:/home/xiaoxin/deepseek-harness/packages/llm/llm
+        specifier: link:../deepseek-harness/packages/llm/llm
         version: link:../deepseek-harness/packages/llm/llm
       '@deepseek-ai/dsh-session':
-        specifier: link:/home/xiaoxin/deepseek-harness/packages/core/session
+        specifier: link:../deepseek-harness/packages/core/session
         version: link:../deepseek-harness/packages/core/session
       '@deepseek-ai/dsh-subagent':
-        specifier: link:/home/xiaoxin/deepseek-harness/packages/subagent/subagent
+        specifier: link:../deepseek-harness/packages/subagent/subagent
         version: link:../deepseek-harness/packages/subagent/subagent
       '@deepseek-ai/dsh-system-prompt':
-        specifier: link:/home/xiaoxin/deepseek-harness/packages/core/system-prompt
+        specifier: link:../deepseek-harness/packages/core/system-prompt
         version: link:../deepseek-harness/packages/core/system-prompt
       '@deepseek-ai/dsh-tools':
-        specifier: link:/home/xiaoxin/deepseek-harness/packages/core/tools
+        specifier: link:../deepseek-harness/packages/core/tools
         version: link:../deepseek-harness/packages/core/tools
       '@deepseek-ai/dsh-workspace':
-        specifier: link:/home/xiaoxin/deepseek-harness/packages/workspace/workspace
+        specifier: link:../deepseek-harness/packages/workspace/workspace
         version: link:../deepseek-harness/packages/workspace/workspace
       '@deepseek-ai/schemastery':
-        specifier: link:/home/xiaoxin/deepseek-harness/vendor/schemastery
+        specifier: link:../deepseek-harness/vendor/schemastery
         version: link:../deepseek-harness/vendor/schemastery
       '@types/node':
         specifier: ^24.13.3
