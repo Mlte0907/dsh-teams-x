@@ -1,0 +1,140 @@
+From 3edc4277102739f79e26f938bf2616a4bb27356d Mon Sep 17 00:00:00 2001
+From: xiaoxin <xiaoxin@deepseek-harness.local>
+Date: Wed, 2 Sep 2026 20:00:25 +0800
+Subject: [PATCH] feat(subagent): add registerContinuableSetup plugin hook
+
+Continuable children now invoke every setup hook a plugin registers
+through ctx.subagents.registerContinuableSetup, on fresh creation and
+on cold resume alike. The hook receives the child Agent's scoped
+context (with .agent, .session, .on) and returns an optional cleanup
+that unwinds with the activation.
+
+Restores compatibility with @nanmicoder/dsh-agent-teams@0.1.13+,
+which installs a member-selection bridge through this hook. No
+behaviour change for plugins that don't register a hook.
+---
+ .../subagent/subagent/src/continuation.ts     | 30 +++++++++++++++++++
+ packages/subagent/subagent/src/index.ts       | 29 ++++++++++++++++++
+ 2 files changed, 59 insertions(+)
+
+diff --git a/packages/subagent/subagent/src/continuation.ts b/packages/subagent/subagent/src/continuation.ts
+index 2103ce2270..645538f541 100644
+--- a/packages/subagent/subagent/src/continuation.ts
++++ b/packages/subagent/subagent/src/continuation.ts
+@@ -170,8 +170,30 @@ interface ContinuationHost {
+    * @returns the observer whose edges this epoch publishes.
+    */
+   observeActivation(provider: string, childId: SessionId, parent: Agent): ActivationObserver
++  /**
++   * Per-continuable-child setup hooks registered by other plugins through
++   * `ctx.subagents.registerContinuableSetup`, read at each materialization
++   * (fresh creation and cold resume alike).
++   * @returns the hooks to run inside the child's own creation context, in
++   * registration order.
++   */
++  continuableSetups(): readonly ContinuableSetup[]
+ }
+ 
++/**
++ * One plugin-supplied setup hook for continuable children.
++ *
++ * The hook receives the child Agent's scoped creation context — the same
++ * context the internal composition setup runs under, so `childCtx.agent`,
++ * `childCtx.on(...)` and the child's session all resolve — and returns an
++ * optional cleanup that runs when the child's activation is disposed.
++ * Returning nothing (or a non-function) registers no cleanup. A hook applies
++ * to both freshly created and cold-resumed children, so it must re-derive its
++ * own state from the child (typically its session events) rather than assume
++ * the creation path.
++ */
++export type ContinuableSetup = (childCtx: Context) => (() => void) | void
++
+ /**
+  * One residency epoch for a reconstructed continuable child Agent. It directly
+  * owns the published `AgentHandle`; the manager's private activation-owner
+@@ -1134,6 +1156,14 @@ export class SubagentContinuationManager {
+         appendDelegatedPolicyOverrides((childCtx.agent as Agent).session, create.delegatedPolicies)
+       }
+       applyChildComposition(childCtx, parent, inputs.composition)
++      // Plugin hooks run last, so their view of the child already includes the
++      // delegated policy seed and the inherited composition. Each returned
++      // cleanup is owned by the child's own scope: it unwinds with the
++      // activation, which is the cold-resume/teardown edge the hooks exist for.
++      for (const hook of this.host.continuableSetups()) {
++        const cleanup = hook(childCtx)
++        if (typeof cleanup === 'function') childCtx.effect(() => cleanup)
++      }
+     }
+     const observer = this.host.observeActivation(provider, childId, parent)
+     // Agent creation owns rollback before handle transfer. A rejection leaves
+diff --git a/packages/subagent/subagent/src/index.ts b/packages/subagent/subagent/src/index.ts
+index 28e50930cd..e7be185fcb 100644
+--- a/packages/subagent/subagent/src/index.ts
++++ b/packages/subagent/subagent/src/index.ts
+@@ -66,6 +66,7 @@ import { createActivationObserver, createLifecycleEmitter, observeRun } from './
+ import type { ActivationObserver, LifecycleEmitter } from './lifecycle.ts'
+ import SubagentContinuationManager from './continuation.ts'
+ import type {
++  ContinuableSetup,
+   ContinuableStart,
+   ContinuableStartSpec,
+   SubagentInterruptAuthority,
+@@ -122,6 +123,7 @@ export {
+ export type { ChildComposition, DelegatedPolicyOverrides } from './child-agent.ts'
+ export type {
+   AgentMessageSource,
++  ContinuableSetup,
+   ContinuableStart,
+   ContinuableStartSpec,
+   SubagentInterruptAuthority,
+@@ -191,6 +193,11 @@ interface BrowserPromptSource {
+ export class SubagentRuntime extends TypertRemoteService {
+   private providers = new Map<string, SubagentProvider>()
+   private continuations: SubagentContinuationManager | undefined
++  /**
++   * Plugin-supplied continuable-child setup hooks, applied at every
++   * materialization in registration order.
++   */
++  private continuableSetupHooks: ContinuableSetup[] = []
+   /**
+    * The contained lifecycle-edge publisher. Built here because scoped dispatch
+    * keys its carrier by this exact service instance, whose own context filter
+@@ -205,6 +212,7 @@ export class SubagentRuntime extends TypertRemoteService {
+       const manager = new SubagentContinuationManager(childCtx, {
+         prepareContinuable: (name, request) => this.prepareContinuable(name, request),
+         observeActivation: (provider, childId, parent) => this.observeActivation(provider, childId, parent),
++        continuableSetups: () => this.continuableSetupHooks,
+       })
+       this.continuations = manager
+       childCtx.effect(() => () => {
+@@ -231,6 +239,27 @@ export class SubagentRuntime extends TypertRemoteService {
+     return this.requireContinuations().startContinuable(spec)
+   }
+ 
++  /**
++   * Register a setup hook that runs inside every continuable child's own
++   * creation context, on fresh creation and on cold resume alike.
++   *
++   * Hooks see the child after its delegated policy seed and inherited
++   * composition are applied, and return an optional cleanup the activation
++   * disposes with the child. A hook must re-derive what it needs from the
++   * child context (its Agent and session events), because a cold resume
++   * reaches the same hook without the original creation inputs.
++   * @param setup - the hook to add; called once per materialized child.
++   * @returns a disposer that removes the hook; the cleanup functions it
++   * already returned stay owned by their activations.
++   */
++  registerContinuableSetup(setup: ContinuableSetup): () => void {
++    this.continuableSetupHooks.push(setup)
++    return () => {
++      const index = this.continuableSetupHooks.indexOf(setup)
++      if (index >= 0) this.continuableSetupHooks.splice(index, 1)
++    }
++  }
++
+   /**
+    * Steer one model-authored message to the sender's direct parent or direct
+    * continuable child. A running target admits it at the nearest step boundary;
+-- 
+2.43.0
+

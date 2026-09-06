@@ -310,7 +310,7 @@ export function installMemberSelectionRuntime(
     let selection = pending.get(key)
     if (selection === undefined) {
       const team = readTeamSync(stateRoot, teamId)
-      if (team?.captainSessionId !== parentSessionId) return () => undefined
+      if (team === undefined || team.captainSessionId !== parentSessionId) return () => undefined
       const durableMember = team.members.find((member) => member.name === memberName)
       selection = selectionFromMember(durableMember)
       if (selection !== undefined
@@ -331,7 +331,7 @@ export function installMemberSelectionRuntime(
         // Capture the attempt synchronously at the event, before any lock
         // wait can let a captain reassign it or replace the member generation.
         const snapshot = readTeamSync(stateRoot, teamId)
-        if (snapshot?.captainSessionId !== parentSessionId) return
+        if (snapshot === undefined || snapshot.captainSessionId !== parentSessionId) return
         const member = snapshot.members.find((item) => item.id === child.id && item.name === memberName && item.status !== 'removed')
         if (member === undefined) return
         const task = snapshot.tasks.find((item) => item.assignee === memberName
@@ -352,7 +352,7 @@ export function installMemberSelectionRuntime(
         await withTeamLock(`team:${stateRoot}:${teamId}`, async () => {
           const team = await readTeam(stateRoot, teamId)
           const current = team?.members.find((item) => item.id === child.id && item.name === memberName && item.status !== 'removed')
-          if (team?.captainSessionId !== parentSessionId || current === undefined || child.status !== 'idle') return
+          if (team === undefined || team.captainSessionId !== parentSessionId || current === undefined || child.status !== 'idle') return
           if (current.status !== 'idle') {
             current.status = 'idle'
             await writeTeam(stateRoot, team)

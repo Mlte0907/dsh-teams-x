@@ -38,6 +38,12 @@ jobs:
         working-directory: deepseek-harness
         run: npm run build:lib:host
 
+      # TeamsX consumes the subagents.registerContinuableSetup plugin seam
+      # (local harness commit 3edc427710, not on upstream master yet).
+      - name: Apply harness patches
+        working-directory: deepseek-harness
+        run: git apply --3way ../patches/harness-0001-registerContinuableSetup.patch
+
       # vendor/cordis is not part of build:lib:host and its lib/ is untracked;
       # build it explicitly so the linked @deepseek-ai/cordis resolves.
       - name: Build vendor cordis
