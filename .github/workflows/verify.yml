@@ -19,7 +19,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: deepseek-ai/deepseek-harness
-          ref: main
+          ref: master
           path: deepseek-harness
 
       - uses: pnpm/action-setup@v4
