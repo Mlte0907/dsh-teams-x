@@ -43,8 +43,8 @@ jobs:
       - name: Build vendor cordis
         working-directory: deepseek-harness/vendor/cordis
         run: |
-          npm install --no-save
-          npx tsc -b tsconfig.json
+          pnpm install --no-save
+          pnpm exec tsc -b tsconfig.json
 
       - name: Diagnose linked packages
         run: |
