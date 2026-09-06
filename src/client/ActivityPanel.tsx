@@ -132,14 +132,29 @@ function useTeamData(expanded: boolean, viewMode: 'live' | 'archive'): {
 }
 
 /**
- * Place the expanded panel as a dropdown under the badge, cleared below the
- * session tab bar. Placement runs ONCE on open (plus on resize): no periodic
- * re-probing, so the panel never visibly jumps after settling. The one-shot
- * horizontal probe still dodges a higher-layer dock that would cover it.
+ * Detect narrow viewports (mobile web / remote): the expanded panel renders
+ * as a full-width bottom sheet instead of a badge-anchored dropdown.
+ */
+function useIsNarrow(): boolean {
+  const [isNarrow, setIsNarrow] = useState(() => window.matchMedia('(max-width: 720px)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 720px)')
+    const onChange = (e: MediaQueryListEvent): void => { setIsNarrow(e.matches) }
+    mq.addEventListener('change', onChange)
+    return () => { mq.removeEventListener('change', onChange) }
+  }, [])
+  return isNarrow
+}
+
+/**
+ * Place the expanded panel under the badge, cleared below the session tab
+ * bar. Placement runs ONCE on open (plus on resize): no periodic re-probing,
+ * so the panel never visibly jumps after settling. The one-shot horizontal
+ * probe still dodges a higher-layer dock that would cover it.
  */
 function usePanelPlacement(
   badgeRef: RefObject<HTMLElement | null>,
-  panelRef: RefObject<HTMLElement | null>,
+  panelRef: RefObject<HTMLDivElement | null>,
   expanded: boolean,
 ): { top: number; right: number } {
   const [pos, setPos] = useState({ top: 96, right: 18 })
@@ -497,6 +512,7 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
   const [hasArchived, setHasArchived] = useState(false)
   const badgeRef = useRef<HTMLButtonElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
+  const isNarrow = useIsNarrow()
   const { teams, error, loading, reload } = useTeamData(expanded, viewMode)
   // One-shot: if archived teams exist for this session, show the badge
   // even when no live teams exist — the user can browse archive history.
@@ -520,7 +536,7 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
   const workingCount = sessionTeams.reduce((count, team) => (
     count + team.members.filter((member) => member.activity === 'working').length
   ), 0)
-  const placement = usePanelPlacement(badgeRef, panelRef, expanded)
+  const placement = usePanelPlacement(badgeRef, panelRef, expanded && !isNarrow)
 
   // Drop the panel on any pointer outside badge + panel, matching the
   // subagent-count dropdown's dismiss behavior.
@@ -569,14 +585,11 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
       {badge}
       {createPortal(
         <div
-          className={css.panelWindow}
+          className={isNarrow ? css.panelSheet : css.panelWindow}
           ref={panelRef}
-          style={{
+          style={isNarrow ? undefined : {
             top: `${placement.top}px`,
             right: `${placement.right}px`,
-            // Viewport clamp: on narrow screens (mobile remote view) a large
-            // right offset must never push the panel past the left edge.
-            maxWidth: `${Math.max(280, window.innerWidth - placement.right - 16)}px`,
           }}
           role='region'
           aria-label={translate('panel.aria')}
