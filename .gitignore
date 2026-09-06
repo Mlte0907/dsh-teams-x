@@ -4,3 +4,6 @@ lib/
 .mimosa/
 *.tsbuildinfo
 deepseek-harness
+
+# 本地交接文档不发布(内容已并入 ACCEPTANCE.md §六)
+HANDOFF.md
