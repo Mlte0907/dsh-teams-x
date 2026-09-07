@@ -775,7 +775,7 @@ pnpm build      # ✅ success
 | 项目 | 优先级 | 说明 |
 |------|--------|------|
 | ~~阶段二 Web 编辑器 UI~~ | ~~中~~ | ✅ **已完成(2026-09-07)**：StagedPlanEditor 组件 + `/plan` edit 路由 + 白名单校验 + N 组 6 用例；依赖编辑沿用行内 deps 输入 + 既有 TaskRow depth-lane 可视化 |
-| registerContinuableSetup 上游化 | 高 | ✅ 分支已推 fork（`Mlte0907/deepseek-harness@feat/register-continuable-setup`，commit `54fbd25d31`，基于上游 master 顶端零冲突 cherry-pick，单包 typecheck 通过）；**PR 网页创建因作者网络暂缓**（compare 直达链与文案已备，创建后由上游 CI 兜底全仓 typecheck） |
+| registerContinuableSetup 上游化 | 高 | ⛔ **上游仓库已禁用外部 PR**（compare 页明示 "An owner of this repository has disabled the ability to open pull requests"，2026-09-07 实证）。补丁分支保留在 fork（`Mlte0907/deepseek-harness@feat/register-continuable-setup`，`54fbd25d31`，+59/-0 干净 diff）；备选路线：①在仓库 Discussions（曾成功发帖 #5817）发布补丁公告供维护者采纳 ②维持本地补丁栈（`patches/harness-0001-*.patch`）为事实标准 |
 | ~~会话内团队卡片~~ | ~~中~~ | ✅ **已实施(2026-09-07，见 §10.6)**：零 harness 改动，ui-workflow-run 模式 + 特性探测降级；另附 `/teamsx` 斜杠命令 |
 
 ### 10.5 阶段二实现记录(2026-09-07)
@@ -820,7 +820,7 @@ pnpm build      # ✅ success
 | npm | ✅ `dsh-teams-x@0.2.0`（78 文件，latest）—— [npm](https://www.npmjs.com/package/dsh-teams-x) |
 | git | ✅ tag `v0.2.0` + master（`accc7e8..1217ddf`，含 README 双语 v0.2 段） |
 | GitHub Release | ✅ [releases/tag/v0.2.0](https://github.com/Mlte0907/dsh-teams-x/releases/tag/v0.2.0)（英文 notes + `dsh-teams-x-0.2.0.tgz` 附件） |
-| 上游 PR | 分支就绪见 §10.4；创建动作因网络暂缓，完成后由上游 CI 兜底全仓 typecheck |
+| 上游 PR | ⛔ 上游仓库禁用外部 PR（见 §10.4）；补丁以 fork 分支 + Discussions 公告形式提供 |
 
 ---
 
