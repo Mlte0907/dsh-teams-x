@@ -31,6 +31,18 @@ pnpm build
 pnpm verify:icons   # 校验 assets/icons 与 icon-data.ts 同步
 ```
 
+## v0.2 新特性
+
+| 特性 | 说明 |
+| --- | --- |
+| 团队模板（profiles） | 配置 `profiles` 后在 `teamsx_create` 描述里写 `profile=模板名`，按预定义成员 + 种子任务 DAG 一键建队 |
+| Web 计划编辑器 | staged 计划面板内直接改：成员行（角色/模型）与任务行（主题/指派/依赖）行内编辑，一次批量原子保存；未知操作白名单拦截 |
+| 自动修复循环 | review/requirements 任务 `failed + needs_revision + findings` 时自动派生 repair 任务（round 上限默认 3，`autoDerive` 可关） |
+| 会话内团队卡片 | `teamsx/*` 事件折叠为消息流内卡片：成员状态可点开 transcript、任务摘要实时更新——零宿主改动，宿主缺能力自动降级 |
+| `/teamsx` 命令 | 输入框斜杠命令一键呼出团队面板 |
+
+全套由功能套件守护：**173 用例**（`pnpm verify` 内含 `scripts/full-functional-test.mjs`）。
+
 ## 工具集（13 个 `teamsx_*` 工具）
 
 | 工具 | 说明 |
