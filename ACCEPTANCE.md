@@ -3,7 +3,7 @@
 **版本**: v0.1.0(tag / [npm](https://www.npmjs.com/package/dsh-teams-x) / [Release](https://github.com/Mlte0907/dsh-teams-x/releases/tag/v0.1.0) 已发布)
 **宿主**: DeepSeek Harness 0.1.3-alpha.1(源码 checkout + 本地补丁栈)
 **验收环境**: DSH 桌面端 + 桌面浏览器(1280px)+ 远程移动端(430px)
-**最后更新**: 2026-09-07(并入 143 用例全功能测试、三个缺陷修复、真实会话冒烟、CI 与发布工程、开发交接、v0.2 可行性审阅)
+**最后更新**: 2026-09-07(并入 157 用例全功能测试、三个缺陷修复、真实会话冒烟、CI 与发布工程、开发交接、v0.2 可行性审阅、**阶段一三实现**、**v0.2 功能用例入套件 L/M 组**)
 
 ---
 
@@ -13,7 +13,7 @@
 
 ```sh
 pnpm verify   # typecheck(host+client) + build + smoke:client + verify:flow
-              # + scripts/full-functional-test.mjs(143 用例) + verify:icons
+              # + scripts/full-functional-test.mjs(163 用例) + verify:icons
 ```
 
 ### 1.2 检查项
@@ -24,12 +24,12 @@ pnpm verify   # typecheck(host+client) + build + smoke:client + verify:flow
 | 插件 bundle 构建(tsdown + lightningcss) | ✅ |
 | 客户端烟雾测试(空态渲染不挂载;`window.matchMedia` stub) | ✅ PASS |
 | 状态层流程验证(`verify:flow`:真实数据归档跳过 + 沙盒 create→claim→persist→mailbox→invariant scan→hand-edit recovery) | ✅ ALL CHECKS PASSED |
-| **全功能测试套件(`full-functional-test.mjs`)143 用例** | ✅ 143 PASS / 0 FAIL |
+| **全功能测试套件(`full-functional-test.mjs`)173 用例** | ✅ 173 PASS / 0 FAIL |
 | 图标资产同步(17 SVG ↔ icon-data.ts) | ✅ in sync |
 | npm pack 预检(68 文件,123.4 kB) | ✅ |
 | GitHub Actions `verify.yml` | ✅ 全绿(runtime face,1m53s) |
 
-### 1.3 全功能测试套件分组(143 用例)
+### 1.3 全功能测试套件分组(173 用例)
 
 | 组 | 覆盖域 | 用例数 |
 |----|--------|--------|
@@ -43,6 +43,10 @@ pnpm verify   # typecheck(host+client) + build + smoke:client + verify:flow
 | H 性能 | 50 成员×300 任务读写 <6ms、索引命中 3ms、1000 条信箱 6ms、500 并发锁 1.8ms | 9 |
 | I 安全 | sanitizeKey 注入矩阵、路径穿越、密钥默认排除、Web 401/403/503 认证门 | 14 |
 | K 视图隔离 | captain/成员信箱可见性、读即确认、mailbox_warnings | 4 |
+| L profiles 模板 | profile= 解析、未知模板拒绝、成员/任务 seed、超 maxMembers 拒绝 | 6 |
+| M 自动修复循环 | review 失败派生 repair(依赖/round/摘要)、round 上限、autoDerive 开关 | 8 |
+| N Web 计划编辑面 | 批量 mutation 白名单校验(未知 action/缺字段/坏依赖/上限) | 6 |
+| O 会话内卡片 | 事件折叠(match/start/update)、成员 childId 保留、状态机全迁移、update 永不 undefined | 10 |
 
 ---
 
@@ -285,3 +289,527 @@ npm 凭据(可 bypass 2FA 的 granular token)在 `~/.npmrc`;泄露时去 npmjs.c
 ---
 
 *文档生成:2026-09-07 · 证据链:143 用例套件 `scripts/full-functional-test.mjs` · 测试报告 `/home/xiaoxin/teamsx-full-test-report-2026-09-06.md` · 根因报告 `/home/xiaoxin/dsh-model-switch-issue-draft.md` · 冒烟会话 session-4e0cacfb / 3b59d56c / 474f9fdf*
+
+---
+
+## 九、v0.2 迭代规划方案(基于全面源码分析)
+
+> 本章节为 v0.2 迭代提供可行性论证和实施路线图，基于对 deepseek-harness 宿主和 dsh-teams-x 插件的全面源码分析制定。
+
+### 9.1 现状总览
+
+#### 9.1.1 v0.1.0 架构核心文件
+
+| 文件 | 行数 | 职责 |
+|------|------|------|
+| `src/tools.ts` | 1994 | 13 个 `teamsx_*` 工具定义 |
+| `src/state.ts` | 1063 | 状态持久化、反向索引、进程内锁 |
+| `src/members.ts` | 714 | 成员生命周期、monkey-patch 守卫 |
+| `src/scheduler.ts` | 482 | 事件驱动任务调度 |
+| `src/quality.ts` | 358 | 质量门、路径审计 |
+| `src/profiles.ts` | 308 | 团队模板解析(未集成) |
+| `src/index.ts` | 388 | 插件入口、Web 路由注册 |
+
+#### 9.1.2 关键架构约束
+
+1. **registerContinuableSetup 补丁依赖**：`members.ts:54` 的 `installMemberSelectionRuntime` 依赖 `ctx.subagents.registerContinuableSetup`，该 API 仅存在于本地补丁 `patches/harness-0001-registerContinuableSetup.patch`，尚未进入上游 master
+
+2. **CI strict typecheck 为 informational**：上游 master 缺该补丁，完整严格类型检查依赖本地补丁栈
+
+3. **profiles.ts 已有完整实现**：模板解析、命令行参数提取、YAML 配置验证均已实现，**已在 v0.2 中与 `teamsx_create` 工具集成** ✅
+
+### 9.2 v0.2 四个方向可行性分析
+
+#### 9.2.1 profiles 团队模板
+
+**现状支撑：**
+- `profiles.ts` 已实现完整的模板解析、验证、渲染逻辑（308 行）
+- `listConfiguredProfiles()`、`parseProfileInvocation()`、`resolveTeamProfile()` 均已就绪
+- 支持 `profile=` 命令行语法和 YAML 配置
+
+**可行性评估：**
+
+| 维度 | 评分 | 说明 |
+|------|------|------|
+| 技术可行性 | **高** | 纯解析逻辑，无需新增 API |
+| 集成复杂度 | **低-中** | 需在 `teamsx_create` 工具中增加 profile 参数处理 |
+| 风险点 | **低** | 模板默认值与 `maxMembers` /质量门契约的组合校验已有基础 |
+
+**工作量估算：**
+- `teamsx_create` 工具增强：约 80-100 行
+- 配置验证增强：约 50 行
+- 测试用例：约 20-25 个
+
+**关键实现路径：**
+```typescript
+// profiles.ts 已实现
+parseProfileInvocation("profile=researcher 分析X") → { profile: "researcher", goal: "分析X" }
+resolveTeamProfile(profiles, "researcher", maxMembers) → NormalizedTeamProfile
+
+// 需要在 teamsx_create 工具中集成
+if (invocation.profile) {
+  const normalized = resolveTeamProfile(config.profiles, invocation.profile, config.maxMembers)
+  // 使用 normalized.members 和 normalized.tasks 初始化团队
+}
+```
+
+#### 9.2.2 Web 计划编辑器
+
+**现状支撑：**
+- `runtime.updateStagedPlanBatch` 已在 `tools.ts` 实现并被 `web-routes.ts` 的 `/plugins/dsh-teams-x/plan` 路由消费
+- staged 锁与原子批量语义已在 G3/G4 用例验证
+- UI 三选项卡片（批准/回聊天/放弃）的数据层已就绪
+
+**可行性评估：**
+
+| 维度 | 评分 | 说明 |
+|------|------|------|
+| 技术可行性 | **高** | 复用现有 runtime，UI 组件独立 |
+| 依赖复杂度 | **中** | 需要 `/plan` 路由支持 `continue` action 驱动 captain 继续编辑 |
+| 风险点 | **中等** | 并发编辑需沿用 `withTeamLock`；编辑器状态与 `awaiting_feedback` 竞态需沿用 `continueStagedPlanning` 语义 |
+
+**工作量估算：**
+- 前端 UI 组件：约 300-400 行（React + CSS Modules）
+- 后端路由增强：约 50 行
+- 测试用例：约 15-20 个
+
+#### 9.2.3 自动修复/复审循环
+
+**现状支撑：**
+- `quality.ts` 已有 `findings`/`verdict`/`round` 字段支持
+- `review` / `repair` 任务契约已定义
+- 调度器具备分派与失败恢复能力
+
+**可行性评估：**
+
+| 维度 | 评分 | 说明 |
+|------|------|------|
+| 技术可行性 | **中高** | 调度策略需要新设计 |
+| 设计复杂度 | **中** | 需定义 round 上限、终止条件、repair 派生约束 |
+| 风险点 | **中等** | repair 不得依赖 failed 任务（已有约束）；循环派生需绕过该约束设计新任务 |
+
+**工作量估算：**
+- 调度器增强（round 上限 + 终止语义）：约 150-200 行
+- 质量门完成后的自动复审触发：约 80 行
+- 测试用例：约 30-35 个
+
+**关键设计决策：**
+```typescript
+// 现有约束：repair 不得依赖 failed 任务
+// 解决方案：repair 任务派生新任务而非重派
+interface RepairLoop {
+  maxRounds: number           // 防止无限循环
+  terminationConditions: {
+    verdict: 'pass'           // 所有 quality 任务通过
+    roundExceeded: true       // 达到 round 上限
+    manualOverride: true      // captain 中断
+  }
+  deriveNewTasks: (failedTask, findings) => TeamTask[]  // 派生而非重派
+}
+```
+
+#### 9.2.4 会话内团队卡片 + 成员跳转
+
+**现状支撑：**
+- `session-navigation.ts` 已有 `TeamsXSessionNavigator` 接口定义
+- `client/session-navigation.ts` 实现了版本容错导航逻辑
+- 面板数据面 (`snapshot`) 齐备
+
+**可行性评估：**
+
+| 维度 | 评分 | 说明 |
+|------|------|------|
+| 技术可行性 | **中** | 受 harness 视图层 ConversationViewDefinition 约束 |
+| 依赖复杂度 | **高** | 需要 harness 视图层深度集成 |
+| 风险点 | **高** | ConversationViewDefinition 属 harness 深水面，版本升级易破 |
+
+**结论**：建议降为 v0.3 目标，不阻塞当前迭代。
+
+### 9.3 推荐执行路线图
+
+```
+v0.2.0 (2-3周)
+├── 阶段1: profiles 模板 ✅ 已完成
+│   ├── teamsx_create 集成 profile 参数
+│   ├── 配置 schema 扩展
+│   └── profiles.ts 只读属性错误修复
+│
+├── 阶段2: Web 计划编辑器 ✅ 后端已就绪
+│   ├── /plan 路由(approve/discard/continue)
+│   ├── PlanReviewBar 组件
+│   └── TaskRow/MemberRow 显示组件
+│
+└── 阶段3: 自动修复循环 ✅ 已完成
+    ├── RepairLoopConfig 接口(scheduler.ts)
+    ├── verdictRequiresRepair/hasReachedRoundLimit/deriveRepairTask 函数
+    ├── triggerRepairLoop 调度器方法
+    └── teamsx_update_task 质量任务失败时自动触发
+
+v0.3.0 (待定)
+└── 会话内团队卡片 ← 需与 harness 视图层协调
+
+持续改进
+├── registerContinuableSetup 补丁上游化
+└── CI strict typecheck 转正
+```
+
+### 9.4 阶段一：profiles 模板 详细实现计划
+
+#### 9.4.1 在 `teamsx_create` 工具增加 profile 参数
+
+**修改文件：** `src/tools.ts`
+
+**新增参数处理逻辑：**
+```typescript
+// 在 teamsx_create 工具的 execute 函数中
+const invocation = parseProfileInvocation(args.description ?? '')
+if (invocation.profile) {
+  const normalized = resolveTeamProfile(config.profiles ?? {}, invocation.profile, config.maxMembers)
+  // 用 normalized.members 和 normalized.tasks 初始化团队
+}
+```
+
+#### 9.4.2 配置 schema 扩展
+
+**修改文件：** `src/index.ts`
+
+```typescript
+// Config 接口扩展
+export interface Config {
+  // ... 现有字段
+  profiles?: Record<string, TeamProfileConfig>
+}
+```
+
+#### 9.4.3 Usage 文本更新
+
+```typescript
+// 在 usageSectionText 中追加
+const profilesText = formatProfilesForPrompt(config.profiles)
+if (profilesText) {
+  return `...\n\n${profilesText}`
+}
+```
+
+#### 9.4.4 验收标准
+
+```bash
+# 用户配置 cordis.yml
+teams-x:
+  profiles:
+    researcher:
+      description: 研究团队模板
+      members:
+        - name: researcher
+          role: 研究员
+          provider: xianyu
+          model: MiniMax-M2.7
+
+# 用户调用
+teamsx_create({ name: "调研X", description: "用 TeamsX 调研X", profile: "researcher" })
+# → 自动创建 researcher 成员 + 预定义任务 DAG
+```
+
+### 9.5 阶段二：Web 计划编辑器 详细实现计划
+
+#### 9.5.1 增强 `/plan` 路由
+
+**修改文件：** `src/index.ts` 中的 `/plugins/dsh-teams-x/plan` 路由
+
+确保 `continue` action 正确驱动 captain 继续编辑：
+```typescript
+if (action === 'continue') {
+  const continued = await teamsXRuntime.continueStagedPlanning(captain, teamId)
+  res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+  res.end(JSON.stringify({ ok: true, phase: 'staged', review: 'awaiting_feedback', ...continued }))
+  return
+}
+```
+
+#### 9.5.2 开发 React 组件
+
+**新增文件：** `src/client/StagedPlanEditor.tsx`
+
+组件结构：
+- `StagedPlanEditor`：主容器，表格编辑成员/任务
+- `DependencyGraph`：DAG 可视化（复用 `taskDepthsById` 数据）
+- `PlanReviewCards`：三选项批准/回聊天/放弃
+
+#### 9.5.3 面板集成
+
+**修改文件：** 面板组件中为 staged 团队渲染编辑器
+
+```typescript
+// 在 ActivityPanel 中
+if (team.phase === 'staged') {
+  return <StagedPlanEditor team={team} onMutate={updateStagedPlan} />
+}
+```
+
+### 9.6 阶段三：自动修复循环 详细实现计划
+
+#### 9.6.1 设计 RepairLoop 语义
+
+```typescript
+// src/scheduler.ts 新增
+interface RepairLoopConfig {
+  maxRounds: number        // 默认 3
+  autoDeriveTasks: boolean // 是否自动派生修复任务
+}
+
+interface RepairLoopState {
+  currentRound: number
+  failedTasks: TeamTask[]
+  derivedTasks: TeamTask[]
+}
+```
+
+#### 9.6.2 调度器增强
+
+**修改文件：** `src/scheduler.ts`
+
+新增逻辑：
+1. 检测 `review` 任务完成时的 verdict
+2. verdict 为 `needs_revision` 或 `reject` 时触发修复流程
+3. 在 round 上限内自动派生 repair 任务
+4. 达到上限或 verdict 为 `pass` 时终止循环
+
+#### 9.6.3 质量门完成后的自动触发
+
+**修改文件：** `src/tools.ts` 中 `teamsx_update_task` 工具
+
+```typescript
+// 在 update_task 完成质量任务后检查
+if (isQualityKind(task.kind) && TERMINAL_TASK_STATUSES.includes(newStatus)) {
+  const result = evaluateQualityCompletion(task, args)
+  if (result.verdict === 'needs_revision' || result.verdict === 'reject') {
+    await triggerRepairLoop(ctx, stateRoot, team, task, result)
+  }
+}
+```
+
+### 9.7 必须解决的技术债
+
+#### 9.7.1 registerContinuableSetup 补丁上游化
+
+**现状：** 该 API 仅存在于本地补丁，是 CI strict typecheck 的阻塞项
+
+**解决路径：**
+1. 准备 PR：基于当前 alpha.1 + 补丁状态，向 `deepseek-harness/packages/subagent/subagent/` 提交 PR
+2. 或创建独立的 `dsh-subagent` 包版本，包含该 API
+
+**影响：** 上游化后 CI 可开启 strict typecheck，143 用例套件增加类型覆盖
+
+#### 9.7.2 profiles 与现有工具的集成测试
+
+**现状(2026-09-07 已完成)：** `full-functional-test.mjs` 新增 **L 组 6 用例**(profile= 解析/未知模板拒绝/成员任务 seed/超上限拒绝)与 **M 组 8 用例**(repair 派生契约/round 上限/autoDerive 开关)，套件 143 → 157 全过
+
+### 9.8 风险评估与缓解
+
+| 风险 | 概率 | 影响 | 缓解措施 |
+|------|------|------|----------|
+| profiles 与 create 集成破坏现有用例 | 低 | 高 | 先扩展测试用例，再实现功能 |
+| Web 编辑器并发编辑竞态 | 中 | 中 | 复用 `withTeamLock`，已在 G3/G4 验证 |
+| 自动修复循环导致任务膨胀 | 中 | 中 | 严格 round 上限，默认 3 轮 |
+| registerContinuableSetup 上游拒绝 | 低 | 中 | 同时维护本地补丁作为 fallback |
+| 会话内卡片依赖 harness 视图层演进 | 高 | 低 | 降为 v0.3 目标，不阻塞 v0.2 |
+
+### 9.9 总结
+
+dsh-teams-x v0.1.0 已是一个非常成熟的插件，143 用例覆盖、真实会话冒烟通过、3 个关键缺陷已修复。v0.2 的四个方向中：
+
+1. **profiles 模板** ✅ 已完成 - 集成到 teamsx_create，支持 profile= 参数
+2. **Web 计划编辑器** ✅ 后端就绪 - approve/discard/continue 路由和 UI 组件已存在
+3. **自动修复循环** ✅ 已完成 - RepairLoopConfig、verdictRequiresRepair、deriveRepairTask、triggerRepairLoop
+4. **会话内卡片** - 降为 v0.3 目标
+
+**已实现的功能：**
+- `teamsx_create` 支持 `profile=template-name` 从配置的模板创建团队
+- `Config.profiles` 字段支持 YAML 配置团队模板
+- `teamsx_update_task` 在 quality 任务失败时自动触发 repair loop
+- `deriveRepairTask` 函数从失败的 review 任务派生 repair 任务
+- round 上限防止无限循环（默认 3 轮）
+
+**最关键的 Technical Debt**是 `registerContinuableSetup` 补丁上游化，这将解除 CI strict typecheck 的阻塞，使整个项目的质量门更严格。
+
+---
+
+## 十、v0.2 实际实现记录(2026-09-07)
+
+### 10.1 阶段一：profiles 模板集成
+
+#### 10.1.1 修改的文件
+
+| 文件 | 修改内容 |
+|------|----------|
+| `src/tools.ts` | 导入 `parseProfileInvocation`, `resolveTeamProfile`, `NormalizedTeamProfile`；ToolsConfig 增加 `profiles` 字段；teamsx_create execute 增加 profile 解析和模板初始化逻辑 |
+| `src/profiles.ts` | 修复 `resolveTeamProfile` 中 readonly 属性赋值错误，使用对象展开替代 mutation |
+| `src/index.ts` | Config 接口增加 `profiles` 字段和 zod schema；`usageSectionText` 增加 `profilesText` 参数说明如何传递 profile |
+
+#### 10.1.2 核心代码变更
+
+**teamsx_create 中的 profile 解析：**
+```typescript
+const invocation = parseProfileInvocation(args.description ?? '')
+let profile: NormalizedTeamProfile | undefined
+if (invocation.profile && config.profiles) {
+  profile = resolveTeamProfile(config.profiles, invocation.profile, config.maxMembers)
+}
+```
+
+**模板初始化团队状态：**
+```typescript
+const members = profile?.members.map((m) => ({
+  id: '',
+  name: m.name,
+  role: m.role,
+  provider: m.provider,
+  model: m.model,
+  // ...
+})) ?? []
+const tasks = profile?.tasks.map((t) => ({
+  id: t.id,
+  subject: t.subject,
+  status: 'pending' as const,
+  dependencies: [...t.dependencies],
+  // ...
+})) ?? []
+```
+
+#### 10.1.3 使用方式
+
+```yaml
+# cordis.yml 配置
+teams-x:
+  profiles:
+    researcher:
+      description: 研究团队模板
+      members:
+        - name: researcher
+          role: 研究员
+          provider: xianyu
+          model: MiniMax-M2.7
+```
+
+```
+teamsx_create({ name: "调研X", description: "调研X profile=researcher" })
+# → 自动创建 researcher 成员
+```
+
+### 10.2 阶段三：自动修复循环
+
+#### 10.2.1 修改的文件
+
+| 文件 | 修改内容 |
+|------|----------|
+| `src/scheduler.ts` | 新增 `RepairLoopConfig` 接口、`DEFAULT_REPAIR_MAX_ROUNDS`、`verdictRequiresRepair()`、`hasReachedRoundLimit()`、`deriveRepairTask()`、`triggerRepairLoop()` 方法 |
+| `src/tools.ts` | 导入 `isQualityKind`、`verdictRequiresRepair`；ToolsConfig 增加 `repairLoop` 字段；teamsx_update_task 在 quality 任务失败时调用 `triggerRepairLoop` |
+
+#### 10.2.2 核心代码变更
+
+**RepairLoopConfig 接口：**
+```typescript
+export interface RepairLoopConfig {
+  readonly maxRounds?: number    // 默认 3
+  readonly autoDerive?: boolean   // 默认 true
+}
+```
+
+**判定是否需要修复：**
+```typescript
+export function verdictRequiresRepair(verdict?: string): boolean {
+  return verdict === 'needs_revision' || verdict === 'reject'
+}
+```
+
+**派生 repair 任务：**
+```typescript
+export function deriveRepairTask(
+  failedTask: TeamTask,
+  findings: readonly ReviewFinding[],
+  taskSeq: number,
+): TeamTask {
+  return {
+    id: `t${taskSeq + 1}`,
+    subject: `Repair: ${failedTask.subject}`,
+    description: summary,
+    status: 'pending',
+    assignee: failedTask.assignee,
+    dependencies: [failedTask.id],
+    round: (failedTask.round ?? 0) + 1,
+    kind: 'repair',
+    // ...
+  }
+}
+```
+
+**调度器触发修复循环：**
+```typescript
+async triggerRepairLoop(workspace, teamId, taskId) {
+  if (repairConfig?.autoDerive === false) return
+  const maxRounds = repairConfig?.maxRounds ?? DEFAULT_REPAIR_MAX_ROUNDS
+  // 检查 round 上限
+  if (hasReachedRoundLimit(task, maxRounds)) return
+  // 派生 repair 任务
+  const repairTask = deriveRepairTask(task, findings, team.taskSeq)
+  team.tasks.push(repairTask)
+}
+```
+
+**teamsx_update_task 自动触发：**
+```typescript
+if (isQualityKind(taskKind) && verdictRequiresRepair(updatedVerdict)) {
+  await scheduler.triggerRepairLoop(workspace, team.id, taskId)
+}
+```
+
+### 10.3 构建验证
+
+```bash
+pnpm typecheck  # ✅ 0 errors
+pnpm build      # ✅ success
+```
+
+### 10.4 遗留项目
+
+| 项目 | 优先级 | 说明 |
+|------|--------|------|
+| ~~阶段二 Web 编辑器 UI~~ | ~~中~~ | ✅ **已完成(2026-09-07)**：StagedPlanEditor 组件 + `/plan` edit 路由 + 白名单校验 + N 组 6 用例；依赖编辑沿用行内 deps 输入 + 既有 TaskRow depth-lane 可视化 |
+| registerContinuableSetup 上游化 | 高 | 补丁需提交上游 PR，解锁 CI strict typecheck |
+| ~~会话内团队卡片~~ | ~~中~~ | ✅ **已实施(2026-09-07，见 §10.6)**：零 harness 改动，ui-workflow-run 模式 + 特性探测降级；另附 `/teamsx` 斜杠命令 |
+
+### 10.5 阶段二实现记录(2026-09-07)
+
+| 文件 | 内容 |
+|------|------|
+| `src/snapshot-types.ts` | `StagedPlanMutation` 类型下沉到零依赖模块(client 不 import host 图) |
+| `src/tools.ts` | 类型 re-export;新增 `parseStagedPlanMutations` 严格白名单校验(未知 action 拒绝——批量执行器的 else 分支会把未知 action 当 remove_member,web 面脏数据绝不能穿透)+ `MAX_STAGED_PLAN_MUTATIONS=64` |
+| `src/index.ts` | `/plan` 路由新增 `edit` action:校验→`updateStagedPlanBatch` 原子提交→返回 staged 快照 |
+| `src/client/StagedPlanEditor.tsx` | 新组件:成员行(role/provider/model 行内编辑+移除/恢复)、任务行(subject/assignee/deps 编辑+增删),diff 生成 mutations 一次批量保存;失败显示后端校验错误 |
+| `src/client/ActivityPanel.tsx` | staged 团队在 PlanReviewBar 下挂载编辑器;`onSaved` 触发即时刷新 |
+| `src/client/locales.ts` | `editor.*` 18 个双语 key |
+| 套件 | N 组 6 用例(合法五种/未知 action/空批量/缺字段/坏 deps/超上限) |
+
+**依赖可视化说明**:`DependencyGraph` 未做成独立画布组件——任务依赖已由既有 TaskRow 的 depth-lane 分层条带呈现(H6 数据面实测),编辑器内 deps 走带提示的文本输入;独立画布列为后续增强。
+
+### 10.6 会话内团队卡片 + /teamsx 命令实现记录(2026-09-07)
+
+**前置研究**:`docs/conversation-view-feasibility.md`——零 harness 改动,通道 A(events.register + conversation.chat.node keyed slot),ui-workflow-run 为同构先例,风险中低。
+
+| 文件 | 内容 |
+|------|------|
+| `src/client/card-state.ts` | 新增**零依赖**折叠状态机(11 种事件的 match/start/update),宿主套件可直接 import 编译产物测试 |
+| `src/client/card-definition.tsx` | 重写坏雏形为正式 `ConversationNodeDefinition`(kind 'teamsx'、target 'chat'、ChatNodeDataMap 合并、update 永不返回 undefined——assembler requireState 断言) |
+| `src/client/TeamsXCardPanel.tsx` | 卡片渲染:phase/halted 徽标、成员行(active+childId 可点开 transcript)、任务摘要(≤8 行 + "+N more")、空态防御 |
+| `src/client/open-request.ts` | 模块级命令→面板 open 通道 |
+| `src/client/index.tsx` | events.register + chat.node slot(均 try-catch + 特性探测);嵌套 `ctx.inject(['commandUi'])` 注册 `/teamsx` popupSelect 命令(子会话 available=false) |
+| `src/client/ActivityPanel.tsx` | 订阅 open-request,`/teamsx` 触发面板展开 |
+| `src/event-types.ts` + `src/tools.ts` | `team-created` payload 补 `phase`(automatic 团队无 team-approved 事件,卡片需要创建时即知 phase) |
+| `package.json` | devDeps/peers/`dsh.client.inject` 补 `dsh-client-ui-chat` + `dsh-client-ui-commands` |
+| 验证 | smoke(definition+命令注册、卡片 SSR、空态防御)+ O 组 10 用例;套件 163→173 全过;typecheck+build ✓(client.js 83→101 kB) |
+
+**版本兼容**:卡片/命令两触点全部特性探测+try-catch,宿主缺 `uiConversation`/`commandUi` 时仅 `console.warn` 降级,header badge + ActivityPanel 零回归;宿主包一律 type-only import(purity 门)。
+
+---
+
+*文档更新:2026-09-07 · v0.2 迭代规划阶段一和三已实现*
