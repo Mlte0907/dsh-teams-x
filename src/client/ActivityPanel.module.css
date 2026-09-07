@@ -820,3 +820,140 @@
 @keyframes teamsx-spin {
   to { transform: rotate(360deg); }
 }
+
+/* ── Staged-plan editor ─────────────────────────────────────────── */
+
+.planEditor {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px dashed var(--dsw-alias-border-l2, #3c3c3d);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.planEditorToggle {
+  align-self: flex-start;
+  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary, #f9fafb);
+  cursor: pointer;
+}
+
+.planEditorToggle:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+}
+
+.planEditorSection {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.planEditorHeading {
+  margin: 0;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--dsw-alias-label-secondary, #9ba0aa);
+}
+
+.planEditorRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.planEditorRow[data-remove] {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.planEditorName {
+  min-width: 72px;
+  max-width: 110px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.planEditorTaskId {
+  min-width: 28px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-secondary, #9ba0aa);
+}
+
+.planEditorInput {
+  flex: 1 1 90px;
+  min-width: 0;
+  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
+  border-radius: 5px;
+  padding: 3px 7px;
+  font-size: 12px;
+  background: var(--dsw-alias-input-bg, rgba(255, 255, 255, 0.04));
+  color: var(--dsw-alias-label-primary, #f9fafb);
+}
+
+.planEditorInput:disabled {
+  opacity: 0.5;
+}
+
+.planEditorInput:focus {
+  outline: 1px solid var(--dsw-alias-state-business-primary, #679efe);
+  outline-offset: 0;
+}
+
+.planEditorSubject {
+  flex: 2 1 140px;
+}
+
+.planEditorRemove {
+  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
+  border-radius: 5px;
+  padding: 2px 8px;
+  font-size: 11px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #9ba0aa);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.planEditorRemove:hover:not(:disabled) {
+  color: var(--dsw-alias-state-error-primary, #f25a5a);
+  border-color: var(--dsw-alias-state-error-primary, #f25a5a);
+}
+
+.planEditorAdd {
+  align-self: flex-start;
+  border: 1px dashed var(--dsw-alias-border-l2, #3c3c3d);
+  border-radius: 5px;
+  padding: 3px 10px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary, #9ba0aa);
+  cursor: pointer;
+}
+
+.planEditorAdd:hover:not(:disabled) {
+  color: var(--dsw-alias-label-primary, #f9fafb);
+}
+
+.planEditorEmpty {
+  margin: 0;
+  font-size: 12px;
+  color: var(--dsw-alias-label-secondary, #9ba0aa);
+}
+
+.planEditorActions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

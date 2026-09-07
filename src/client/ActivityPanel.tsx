@@ -29,6 +29,8 @@ import {
 import type { TeamsXLocaleKey } from './locale-keys.ts'
 import type { TeamActivitySnapshot } from '../snapshot-types.ts'
 import type { TeamsXSessionNavigator } from './session-navigation.ts'
+import { StagedPlanEditor } from './StagedPlanEditor.tsx'
+import { onTeamsXPanelRequest } from './open-request.ts'
 
 /** Panel data endpoint served by the host plane. */
 export const TEAMSX_STATE_URL = '/plugins/dsh-teams-x/state'
@@ -431,11 +433,13 @@ function PlanReviewBar({ team, t }: { team: TeamActivitySnapshot; t: ReturnType<
 }
 
 /** One team card: header, roster, DAG, inbox preview, and stop control. */
-function TeamCard({ team, t, openMember, readOnly }: {
+function TeamCard({ team, t, openMember, readOnly, onSaved }: {
   team: TeamActivitySnapshot
   t: ReturnType<typeof makeT>
   openMember: ActivityPanelProps['openMember']
   readOnly?: boolean
+  /** Called after a staged-plan edit batch commits, to refresh immediately. */
+  onSaved: () => void
 }): ReactElement {
   const [confirming, setConfirming] = useState(false)
   const [stopping, setStopping] = useState(false)
@@ -457,7 +461,12 @@ function TeamCard({ team, t, openMember, readOnly }: {
 
   return (
     <section className={css.teamCard} data-phase={team.phase} data-halted={team.halted === true || undefined}>
-      {team.phase === 'staged' && !readOnly && <PlanReviewBar team={team} t={t} />}
+      {team.phase === 'staged' && !readOnly && (
+        <>
+          <PlanReviewBar team={team} t={t} />
+          <StagedPlanEditor team={team} t={t} onSaved={onSaved} />
+        </>
+      )}
       <header className={css.teamHeader}>
         <TeamsXLogo size={20} className={css.teamLogo} decorative />
         <div className={css.teamTitleBlock}>
@@ -534,6 +543,12 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
   const badgeRef = useRef<HTMLButtonElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
   const isNarrow = useIsNarrow()
+  // The /teamsx slash command expands this panel for its session.
+  useEffect(() => (
+    onTeamsXPanelRequest((target) => {
+      if (target === sessionId) setExpanded(true)
+    })
+  ), [sessionId])
   const { teams, error, loading, reload } = useTeamData(expanded, viewMode)
   // One-shot: if archived teams exist for this session, show the badge
   // even when no live teams exist — the user can browse archive history.
@@ -685,7 +700,7 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
         </div>
       )}
           <div className={css.teamList}>
-            {sessionTeams.map((team) => <TeamCard key={`${team.workspace}/${team.teamId}`} team={team} t={translate} openMember={openMember} readOnly={viewMode === 'archive'} />)}
+            {sessionTeams.map((team) => <TeamCard key={`${team.workspace}/${team.teamId}`} team={team} t={translate} openMember={openMember} readOnly={viewMode === 'archive'} onSaved={reload} />)}
           </div>
         </div>,
         document.body,

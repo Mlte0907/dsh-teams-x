@@ -27,6 +27,7 @@ import type { WorkspaceRegistry } from '@deepseek-ai/dsh-workspace'
 import { KNOWN_SESSION_EVENT_TYPES } from '@deepseek-ai/dsh-session'
 import {
   haltTeamWork,
+  parseStagedPlanMutations,
   registerTeamsXTools,
   type StagedPlanMutation,
   type ToolsConfig,
@@ -38,6 +39,7 @@ import { join } from 'node:path'
 import { collectArchivedTeamsActivity, collectTeamsActivity } from './snapshot.ts'
 import { findTeamByCaptain } from './state.ts'
 import { authenticatedWebRoutes, type BrowserRequestGate, type WebRouteHost } from './web-routes.ts'
+import { formatProfilesForPrompt, type TeamProfileConfig } from './profiles.ts'
 
 export const name = 'teams-x'
 export const inject = ['tools', 'llm', 'subagents', 'systemPrompt', 'agents']
@@ -63,6 +65,8 @@ export interface Config {
   maxMembers?: number
   /** Prompt-section order for the usage policy (default `118`). */
   promptSectionOrder?: number
+  /** Named team profile templates. */
+  profiles?: Record<string, TeamProfileConfig>
 }
 
 const fallbackRouteConfig = z.union([
@@ -79,12 +83,13 @@ export const Config: z<Config> = z.object({
   memberMaxDepth: z.natural().default(1),
   maxMembers: z.natural().min(1).default(8),
   promptSectionOrder: z.natural().default(118),
+  profiles: z.any(),
 })
 
 /** The model-facing usage policy: when and how to drive TeamsX. */
-export function usageSectionText(toolNames: string): string {
-  return `When the user asks to run something with TeamsX (e.g. "use TeamsX to do X"), you are the captain of a multi-agent team. Follow this protocol:
-1. Call teamsx_create with a team name, the goal as description, and approval="required". This creates a staged plan and must not spawn members or schedule work. Use approval="automatic" only when the user explicitly asks to skip review and run immediately.
+export function usageSectionText(toolNames: string, profilesText?: string): string {
+  const base = `When the user asks to run something with TeamsX (e.g. "use TeamsX to do X"), you are the captain of a multi-agent team. Follow this protocol:
+1. Call teamsx_create with a team name, the goal as description, and approval="required". This creates a staged plan and must not spawn members or schedule work. Use approval="automatic" only when the user explicitly asks to skip review and run immediately. You can include profile=template-name in the description to use a configured team template.
 2. Call teamsx_add_member once per role the goal needs (researcher, engineer, reviewer, ...). In staging these are editable roster entries, not running subagents. By default a member snapshots your current provider/model/reasoning route; use a different route only when the goal or user requires it.
 3. Analyze the goal and create the smallest useful task DAG while staged. Every teamsx_create_task call must include a non-empty subject, including verification and review tasks. Independent work should be parallel; dependencies are only genuine prerequisites. When the complete roster and DAG are staged, ask the user to decide with the ask_user_question tool — one question, header "TeamsX 计划审批", options exactly ["批准并运行", "回聊天修改", "放弃计划"], question text summarizing the plan in one or two sentences. Map the answer: 批准并运行 → teamsx_approve (the user's selection counts as the explicit approval); 回聊天修改 → ask what to change, then teamsx_edit_plan, re-ask after revising; 放弃计划 → teamsx_delete. Never call teamsx_approve without that selection, and never call it during the planning turn.
 4. After approval, the final member configuration is spawned atomically and the scheduler starts ready work. Lead by delegation: monitor with teamsx_status, send guidance with teamsx_send_message, and let idle teammates execute ready work. Do not duplicate a teammate's work merely because its turn is slow. If the user requires every member to contribute or report, create one task per required contribution (or message each member directly); never wait for an unassigned member to produce work it was never given.
@@ -94,6 +99,12 @@ export function usageSectionText(toolNames: string): string {
 8. Present the team's results to the user, then teamsx_delete the team unless the user wants to keep working with it. Stopping a team aborts the Captain's current turn as well as member work; only a later explicit user turn may resume it.
 
 Tools: ${toolNames}`
+  if (profilesText) {
+    return `${base}
+
+${profilesText}`
+  }
+  return base
 }
 
 export function apply(ctx: Context, config: Config): void {
@@ -106,6 +117,7 @@ export function apply(ctx: Context, config: Config): void {
     fallback: config.fallback,
     memberMaxDepth: config.memberMaxDepth ?? 1,
     maxMembers: config.maxMembers ?? 8,
+    profiles: config.profiles,
   }
 
   const toolNames = [
@@ -126,7 +138,7 @@ export function apply(ctx: Context, config: Config): void {
   ctx.systemPrompt.section({
     name: 'teams-x:usage',
     order: config.promptSectionOrder ?? 118,
-    text: () => usageSectionText(toolNames),
+    text: () => usageSectionText(toolNames, formatProfilesForPrompt(config.profiles)),
   })
 
   const teamsXRuntime = registerTeamsXTools(ctx, resolved)
@@ -350,6 +362,20 @@ export function apply(ctx: Context, config: Config): void {
           return
         }
         try {
+          if (action === 'edit') {
+            let mutations: StagedPlanMutation[]
+            try {
+              mutations = parseStagedPlanMutations(payload['mutations'])
+            } catch (error: unknown) {
+              res.writeHead(400, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+              res.end(JSON.stringify({ error: error instanceof Error ? error.message : 'invalid mutations' }))
+              return
+            }
+            const updated = await teamsXRuntime.updateStagedPlanBatch(captain, teamId, mutations)
+            res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+            res.end(JSON.stringify({ ok: true, phase: 'staged', review: 'awaiting_review', teamId: updated.id, members: updated.members.length, tasks: updated.tasks.length }))
+            return
+          }
           if (action === 'approve') {
             const approved = await teamsXRuntime.approveStagedTeam(captain, teamId)
             res.writeHead(200, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })

@@ -1,0 +1,174 @@
+/* TeamsX in-chat conversation card. Token-driven: follows light/dark. */
+
+.card {
+  border: 0.5px solid var(--dsw-alias-border-l3, #3c3c3d);
+  border-radius: 10px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: var(--dsw-alias-bg-base);
+  max-width: 560px;
+}
+
+.cardHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.cardName {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dsw-alias-label-primary, #f9fafb);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+.cardBadge {
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 10px;
+  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
+  color: var(--dsw-alias-label-secondary, #9ba0aa);
+}
+
+.cardBadge[data-phase='running'] {
+  color: var(--dsw-alias-state-business-primary, #679efe);
+  border-color: var(--dsw-alias-state-business-primary, #679efe);
+}
+
+.cardBadge[data-phase='deleted'] {
+  text-decoration: line-through;
+}
+
+.cardHalted {
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 10px;
+  color: var(--dsw-alias-state-warning-primary, #f5a623);
+  border: 1px solid var(--dsw-alias-state-warning-primary, #f5a623);
+}
+
+.cardCounts {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--dsw-alias-label-secondary, #9ba0aa);
+  font-variant-numeric: tabular-nums;
+}
+
+.cardRoster {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.cardMember {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  padding: 2px 4px;
+  border-radius: 5px;
+  background: transparent;
+  border: none;
+  color: var(--dsw-alias-label-primary, #f9fafb);
+  text-align: left;
+  min-width: 0;
+}
+
+button.cardMember {
+  cursor: pointer;
+}
+
+button.cardMember:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+}
+
+.cardMember[data-status='removed'] {
+  opacity: 0.5;
+}
+
+.cardDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  flex: none;
+  background: var(--dsw-alias-state-business-primary, #679efe);
+}
+
+.cardDot[data-state='removed'] {
+  background: var(--dsw-alias-label-tertiary, #6b7280);
+}
+
+.cardMemberName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cardMemberRole {
+  font-size: 10px;
+  color: var(--dsw-alias-label-secondary, #9ba0aa);
+}
+
+.cardMemberState {
+  font-size: 10px;
+  color: var(--dsw-alias-label-tertiary, #6b7280);
+}
+
+.cardTasks {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-top: 0.5px solid var(--dsw-alias-border-l3, #3c3c3d);
+  padding-top: 4px;
+}
+
+.cardTask {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  min-width: 0;
+}
+
+.cardTask[data-status='completed'] .cardTaskSubject {
+  text-decoration: line-through;
+  color: var(--dsw-alias-label-secondary, #9ba0aa);
+}
+
+.cardTask[data-status='failed'] .cardTaskStatus {
+  color: var(--dsw-alias-state-error-primary, #f25a5a);
+}
+
+.cardTaskId {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary, #6b7280);
+  flex: none;
+  min-width: 22px;
+}
+
+.cardTaskSubject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+.cardTaskStatus {
+  margin-left: auto;
+  flex: none;
+  font-size: 10px;
+  color: var(--dsw-alias-label-secondary, #9ba0aa);
+}
+
+.cardMore {
+  font-size: 11px;
+  color: var(--dsw-alias-label-tertiary, #6b7280);
+  padding-left: 28px;
+}

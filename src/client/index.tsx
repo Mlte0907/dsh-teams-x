@@ -1,24 +1,31 @@
 /**
- * Browser plugin for the TeamsX activity panel.
+ * Browser plugin for the TeamsX activity panel and conversation cards.
  *
- * Registers the locale dictionaries and mounts the activity badge into the
- * session header's action list (`conversation.session.header.actions`, next
- * to the autonomous-mode and Session-log controls). The slot is
- * session-scoped: the framework resolves the current `sessionId`, and the
- * badge renders only when this session owns or participates in a team.
+ * Registers the locale dictionaries, mounts the activity badge into the
+ * session header's action list, folds `teamsx/*` session events into an
+ * in-chat team card (ui-workflow-run pattern), and contributes the
+ * `/teamsx` slash command that opens the panel. Every conversation/command
+ * touchpoint is feature-detected and try-caught: on an older host the
+ * header badge + panel keep working with zero regression.
  * @module dsh-teams-x/client
  */
 
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 // Type-only merges: locale (ctx.locale), renderer (ctx.slots), sessions
-// (ctx.sessions), and the conversation SlotMap row that declares the
-// session-header action seat.
+// (ctx.sessions), the conversation SlotMap row that declares the
+// session-header action seat, the chat ChatNodeDataMap row for the card,
+// and the commands contract type.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type { CommandUiContract } from '@deepseek-ai/dsh-client-ui-commands/client'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import { ActivityPanel } from './ActivityPanel.tsx'
+import { teamsXCardDefinition } from './card-definition.tsx'
+import { TeamsXCardPanel } from './TeamsXCardPanel.tsx'
+import { requestTeamsXPanel } from './open-request.ts'
 import { TEAMSX_LOCALE_NAMESPACE, en, zh } from './locales.ts'
 import type { TeamsXLocaleKey } from './locale-keys.ts'
 import type { TeamsXSessionNavigator } from './session-navigation.ts'
@@ -53,4 +60,79 @@ export function apply(ctx: ClientContext): void {
     label: 'TeamsX activity',
     locale: TEAMSX_LOCALE_NAMESPACE,
   }, (props) => <ActivityPanel {...props} sessions={sessions} openMember={openMember} />))
+  registerConversationCard(ctx, openMember)
+  registerTeamsXCommand(ctx)
+}
+
+/**
+ * Fold `teamsx/*` events into in-chat cards. Feature-detected: a host
+ * without the conversation registries (or a contract drift) only loses the
+ * card — the header badge and panel keep working.
+ */
+function registerConversationCard(
+  ctx: ClientContext,
+  openMember: (parentId: string, childId: string) => void,
+): void {
+  try {
+    const events = (ctx.uiConversation as {
+      events?: { register?: (definition: unknown) => unknown }
+    } | undefined)?.events
+    if (typeof events?.register !== 'function') {
+      console.warn('teams-x: conversation events registry unavailable; in-chat team cards disabled')
+      return
+    }
+    events.register(teamsXCardDefinition)
+  } catch (error: unknown) {
+    console.warn('teams-x: failed to register team cards; keeping the header panel only', error)
+    return
+  }
+  try {
+    ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
+      name: 'conversation.chat.node',
+      key: 'teamsx-card',
+      locale: TEAMSX_LOCALE_NAMESPACE,
+      inject: () => ({ openMember }),
+    }, TeamsXCardPanel))
+  } catch (error: unknown) {
+    console.warn('teams-x: failed to register the team card renderer', error)
+  }
+}
+
+/**
+ * Contribute the `/teamsx` slash command (popupSelect) that expands the
+ * session's TeamsX panel. The commandUi service is requested through a
+ * nested inject so a host without it cannot break the main apply path.
+ */
+function registerTeamsXCommand(ctx: ClientContext): void {
+  try {
+    ctx.inject(['commandUi'], (scope) => {
+      try {
+        const command = scope.get('commandUi') as CommandUiContract
+        ctx.effect(
+          () => command.register({
+            name: 'teamsx',
+            description: 'Open the TeamsX team panel',
+            available: (session) => {
+              const sessions = ctx.sessions as { subagentAddress?: (id: SessionId) => unknown }
+              // Teammate sub-sessions have no captain panel of their own.
+              if (typeof sessions.subagentAddress !== 'function') return true
+              return sessions.subagentAddress(session.sessionId) === undefined
+            },
+            ui: {
+              kind: 'popupSelect',
+              options: async () => [{ id: 'open', label: 'TeamsX' }],
+              onSelect: async (_option, session) => {
+                requestTeamsXPanel(session.sessionId)
+              },
+            },
+          }),
+          'teams-x: /teamsx command',
+        )
+      } catch (error: unknown) {
+        console.warn('teams-x: commandUi unavailable; the /teamsx command is disabled', error)
+      }
+    })
+  } catch (error: unknown) {
+    console.warn('teams-x: commandUi service missing; the /teamsx command is disabled', error)
+  }
 }

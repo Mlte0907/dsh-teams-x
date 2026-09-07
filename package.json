@@ -38,6 +38,8 @@
     "client": {
       "inject": [
         "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-chat",
+        "@deepseek-ai/dsh-client-ui-commands",
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-renderer",
         "@deepseek-ai/dsh-api-session-controller"
@@ -60,6 +62,8 @@
     "@deepseek-ai/cordis": ">=4.0.0",
     "@deepseek-ai/dsh-agent": ">=0.1.2-alpha.2",
     "@deepseek-ai/dsh-client-locale": ">=0.1.2-alpha.2",
+    "@deepseek-ai/dsh-client-ui-chat": ">=0.1.2-alpha.2",
+    "@deepseek-ai/dsh-client-ui-commands": ">=0.1.2-alpha.2",
     "@deepseek-ai/dsh-client-ui-conversation": ">=0.1.2-alpha.2",
     "@deepseek-ai/dsh-client-ui-session": ">=0.1.2-alpha.2",
     "@deepseek-ai/dsh-client-ui-slots": ">=0.1.2-alpha.2",
@@ -79,6 +83,12 @@
       "optional": true
     },
     "@deepseek-ai/dsh-client-locale": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-chat": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-client-ui-commands": {
       "optional": true
     },
     "@deepseek-ai/dsh-client-ui-conversation": {
@@ -118,6 +128,8 @@
     "@deepseek-ai/dsh-client-connection": "link:./deepseek-harness/packages/client/connection",
     "@deepseek-ai/dsh-api-session-controller": "link:./deepseek-harness/packages/api/session-controller",
     "@deepseek-ai/dsh-client-locale": "link:./deepseek-harness/packages/client/locale",
+    "@deepseek-ai/dsh-client-ui-chat": "link:./deepseek-harness/packages/client/ui-chat",
+    "@deepseek-ai/dsh-client-ui-commands": "link:./deepseek-harness/packages/client/ui-commands",
     "@deepseek-ai/dsh-client-ui-conversation": "link:./deepseek-harness/packages/client/ui-conversation",
     "@deepseek-ai/dsh-client-ui-layout": "link:./deepseek-harness/packages/client/ui-layout",
     "@deepseek-ai/dsh-client-ui-renderer": "link:./deepseek-harness/packages/client/ui-renderer",

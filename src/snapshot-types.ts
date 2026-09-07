@@ -7,6 +7,39 @@
 
 import type { MemberStatus } from './types.ts'
 
+/**
+ * Browser/UI mutations allowed while a plan is waiting for approval.
+ * Shared by the host runtime (tools.ts) and the client editor; kept in this
+ * zero-import module so the browser bundle never pulls in the host graph.
+ */
+export type StagedPlanMutation =
+  | {
+      action: 'update_member'
+      memberName: string
+      role?: string | null
+      provider: string
+      model: string
+      reasoningEffort?: string | null
+      executionPrompt?: string | null
+    }
+  | {
+      action: 'update_task'
+      taskId: string
+      subject: string
+      description?: string | null
+      assignee?: string | null
+      dependencies: string[]
+    }
+  | {
+      action: 'add_task'
+      subject: string
+      description?: string | null
+      assignee?: string | null
+      dependencies: string[]
+    }
+  | { action: 'remove_task'; taskId: string }
+  | { action: 'remove_member'; memberName: string }
+
 /** One member row of the activity snapshot. */
 export interface TeamActivityMember {
   readonly id: string

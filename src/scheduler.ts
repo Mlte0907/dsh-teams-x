@@ -41,6 +41,61 @@ export const DEPENDENCY_OUTPUTS_TOTAL_MAX_CHARS = 12_000
 export interface SchedulerConfig {
   readonly stateDir: string
   readonly executionPrompt?: string
+  /** Automatic repair loop config. */
+  readonly repairLoop?: RepairLoopConfig
+}
+
+/** Automatic repair loop configuration. */
+export interface RepairLoopConfig {
+  /** Maximum rounds of repair per failed task (default 3). */
+  readonly maxRounds?: number
+  /** Whether to auto-derive repair tasks after a failed review (default true). */
+  readonly autoDerive?: boolean
+}
+
+/** Default max rounds for repair loop. */
+export const DEFAULT_REPAIR_MAX_ROUNDS = 3
+
+/**
+ * Check if a completed task verdict requires repair.
+ */
+export function verdictRequiresRepair(verdict?: string): boolean {
+  return verdict === 'needs_revision' || verdict === 'reject'
+}
+
+/**
+ * Check if a task has reached the repair round limit.
+ */
+export function hasReachedRoundLimit(task: TeamTask, maxRounds: number): boolean {
+  return (task.round ?? 0) >= maxRounds
+}
+
+/**
+ * Derive a repair task from a failed quality task.
+ * The repair task depends on the failed task, has round+1, and summarizes the findings.
+ */
+export function deriveRepairTask(
+  failedTask: TeamTask,
+  findings: readonly { id: string; severity: string; problem: string; requiredFix: string }[],
+  taskSeq: number,
+): TeamTask {
+  const now = Date.now()
+  const summary = findings.length > 0
+    ? `Review findings (${findings.length}): ${findings.map((f) => `[${f.severity}] ${f.problem}`).join('; ')}`
+    : 'Review feedback requires revision.'
+  return {
+    id: `t${taskSeq + 1}`,
+    subject: `Repair: ${failedTask.subject}`,
+    description: summary,
+    status: 'pending',
+    assignee: failedTask.assignee,
+    dependencies: [failedTask.id],
+    attempt: 0,
+    round: (failedTask.round ?? 0) + 1,
+    kind: 'repair',
+    createdAt: now,
+    updatedAt: now,
+  }
 }
 
 export interface TeamScheduler {
@@ -48,6 +103,8 @@ export interface TeamScheduler {
   kickTeam(workspace: string, teamId: string, captain?: Agent): Promise<void>
   /** Try to flush fallback mail or give one member one ready task. */
   kickMember(workspace: string, teamId: string, memberName: string, captain?: Agent): Promise<void>
+  /** Trigger repair loop for a failed quality task. */
+  triggerRepairLoop(workspace: string, teamId: string, taskId: string): Promise<void>
 }
 
 /** One completed recursive dependency shown to the assignee. */
@@ -412,6 +469,33 @@ export function installTeamScheduler(ctx: Context, config: SchedulerConfig): Tea
           if (currentMember !== undefined && currentMember.status !== 'removed') currentMember.status = 'idle'
           await writeTeam(stateRoot, fresh)
         })
+      })
+    },
+
+    async triggerRepairLoop(workspace, teamId, taskId) {
+      const stateRoot = stateRootOf(workspace, config)
+      const repairConfig = config.repairLoop
+      if (repairConfig?.autoDerive === false) return
+      const maxRounds = repairConfig?.maxRounds ?? DEFAULT_REPAIR_MAX_ROUNDS
+      await withTeamLock(teamLockKey(stateRoot, teamId), async () => {
+        const team = await readTeam(stateRoot, teamId)
+        if (team === undefined || team.halted === true || team.phase === 'staged') return
+        const task = team.tasks.find((t) => t.id === taskId)
+        if (task === undefined) return
+        // Only trigger for quality tasks with verdict requiring repair
+        if (!verdictRequiresRepair(task.verdict)) return
+        // Check round limit
+        if (hasReachedRoundLimit(task, maxRounds)) {
+          ctx.logger.info(`teams-x: repair loop reached round limit for task ${taskId}`)
+          return
+        }
+        // Derive repair task
+        const findings = task.findings ?? []
+        const repairTask = deriveRepairTask(task, findings, team.taskSeq)
+        team.tasks.push(repairTask)
+        team.taskSeq += 1
+        await writeTeam(stateRoot, team)
+        ctx.logger.info(`teams-x: derived repair task ${repairTask.id} for failed task ${taskId}`)
       })
     },
   }

@@ -780,6 +780,183 @@ try {
 
     await Promise.all([performance, views])
   }
+
+  // ══════════════════ L profiles 模板(v0.2 阶段一) ══════════════════
+  group('L profiles 模板(teamsx_create profile= 参数)')
+  {
+    const wsL = join(sandbox, 'ws-profiles')
+    const cfgL = {
+      ...CONFIG, stateDir: '.teams-x-l',
+      profiles: {
+        researcher: {
+          description: '研究团队模板',
+          members: [{ name: 'researcher', role: '研究员', provider: 'xianyu', model: 'MiniMax-M2.7' }],
+          tasks: [{ id: 'r1', subject: '调研目标', assignee: 'researcher', dependencies: [] }],
+        },
+      },
+    }
+    const rootL = join(wsL, cfgL.stateDir)
+    const mL = makeMockCtx()
+    toolsMod.registerTeamsXTools(mL.ctx, cfgL)
+    const capL = makeAgent('captain-L', wsL)
+    const lexec = { agent: capL, signal: SIGNAL() }
+
+    // 解析在 withTeamLock 之前失败 → 不创建团队、不占 captain 名额
+    await expectError('L1', '未知 profile 名拒绝', () => toolOf(mL.registered, 'teamsx_create').execute({ name: '调研X', description: 'profile=ghost 调研X' }, lexec), 'AgentTeams profile "ghost" not found')
+    const seeded = await toolOf(mL.registered, 'teamsx_create').execute(
+      { name: '调研X', description: 'profile=researcher 调研X', approval: 'required' },
+      lexec,
+    )
+    check('L2', 'profile= 解析后 staged 创建成功', seeded.phase === 'staged', JSON.stringify(seeded.phase))
+    const teamL = await state.readTeam(rootL, seeded.team_id)
+    check('L3', '模板成员已 seed (researcher)', teamL.members.length === 1 && teamL.members[0].name === 'researcher' && teamL.members[0].model === 'MiniMax-M2.7', JSON.stringify(teamL.members.map((m) => `${m.name}/${m.model}`)))
+    check('L4', '模板任务已 seed (r1) 且指派保留', teamL.tasks.length === 1 && teamL.tasks[0].id === 'r1' && teamL.tasks[0].assignee === 'researcher', JSON.stringify(teamL.tasks.map((t) => t.id)))
+    check('L5', 'taskSeq 反映 seed 任务数', teamL.taskSeq === 1, String(teamL.taskSeq))
+    // 成员数超 maxMembers(4) 的模板在 resolve 阶段拒绝
+    const cfgL2 = { ...cfgL, profiles: { big: { members: Array.from({ length: 5 }, (_, i) => ({ name: `m${i}` })) } } }
+    const mL2 = makeMockCtx()
+    toolsMod.registerTeamsXTools(mL2.ctx, cfgL2)
+    const capL2 = makeAgent('captain-L2', wsL)
+    await expectError('L6', '模板成员超 maxMembers 拒绝', () => toolOf(mL2.registered, 'teamsx_create').execute({ name: 'big-team', description: 'profile=big x' }, { agent: capL2, signal: SIGNAL() }), 'the limit is 4')
+  }
+
+  // ══════════════════ M 自动修复循环(v0.2 阶段三) ══════════════════
+  group('M 自动修复循环(quality 失败 → repair 任务派生)')
+  {
+    const wsM = join(sandbox, 'ws-repair')
+    const cfgM = { ...CONFIG, stateDir: '.teams-x-m', repairLoop: { maxRounds: 3, autoDerive: true } }
+    const rootM = join(wsM, cfgM.stateDir)
+    const mM = makeMockCtx()
+    toolsMod.registerTeamsXTools(mM.ctx, cfgM)
+    const capM = makeAgent('captain-M', wsM)
+    const mexec = { agent: capM, signal: SIGNAL() }
+
+    const now = Date.now()
+    await state.createTeamDir(rootM, {
+      name: 'repair-team', id: 'repair-team', captainSessionId: 'captain-M', createdAt: now,
+      members: [],
+      tasks: [{
+        id: 't1', subject: 'Review deliverable', kind: 'review', description: 'review of t0',
+        status: 'in_progress', dependencies: [], attempt: 0, createdAt: now, updatedAt: now,
+      }],
+      taskSeq: 1, phase: 'running',
+    })
+
+    // 触发契约: review 任务必须 failed + needs_revision + ≥1 findings(completed 只许 verdict=pass)
+    const upd = await toolOf(mM.registered, 'teamsx_update_task').execute(
+      {
+        task_id: 't1', status: 'failed', verdict: 'needs_revision',
+        findings: [{ id: 'f1', severity: 'high', problem: '崩溃', requiredFix: '加空值保护' }],
+      },
+      mexec,
+    )
+    check('M1', 'review 任务标记 failed+needs_revision', upd.status === 'failed' && upd.taskVerdict === 'needs_revision', JSON.stringify(upd))
+    const teamM = await state.readTeam(rootM, 'repair-team')
+    const repair = teamM.tasks.find((t) => t.kind === 'repair')
+    check('M2', '自动派生 repair 任务', repair !== undefined, 'no repair task found')
+    if (repair) {
+      check('M3', 'repair 依赖失败任务 t1', repair.dependencies.includes('t1'), JSON.stringify(repair.dependencies))
+      check('M4', 'repair round = 1(失败任务 round+1)', repair.round === 1, String(repair.round))
+      check('M5', 'repair 主题含 Repair: 前缀且 findings 摘要入 description', repair.subject === 'Repair: Review deliverable' && repair.description.includes('[high] 崩溃'), `${repair.subject} / ${repair.description}`)
+    }
+    check('M6', '原 review 任务 verdict 持久化', teamM.tasks.find((t) => t.id === 't1')?.verdict === 'needs_revision', String(teamM.tasks.find((t) => t.id === 't1')?.verdict))
+
+    // round 上限: round=3 的失败 review 不再派生
+    teamM.tasks = teamM.tasks.filter((t) => t.kind !== 'repair')
+    teamM.tasks.push({
+      id: 't2', subject: 'Review 2', kind: 'review', description: 'review of t0',
+      status: 'in_progress', dependencies: [], attempt: 0, round: 3, createdAt: now, updatedAt: now,
+    })
+    teamM.taskSeq = 2
+    await state.writeTeam(rootM, teamM)
+    await toolOf(mM.registered, 'teamsx_update_task').execute(
+      { task_id: 't2', status: 'failed', verdict: 'reject', findings: [{ id: 'f2', severity: 'medium', problem: 'x', requiredFix: 'y' }] },
+      mexec,
+    )
+    const teamM2 = await state.readTeam(rootM, 'repair-team')
+    const repairCount = teamM2.tasks.filter((t) => t.kind === 'repair').length
+    check('M7', 'round 已达上限(3)时不再派生 repair', repairCount === 0, `repair count=${repairCount}`)
+
+    // autoDerive=false 关闭自动派生
+    const wsM3 = join(sandbox, 'ws-repair-off')
+    const cfgM3 = { ...CONFIG, stateDir: '.teams-x-m3', repairLoop: { autoDerive: false } }
+    const rootM3 = join(wsM3, cfgM3.stateDir)
+    const mM3 = makeMockCtx()
+    toolsMod.registerTeamsXTools(mM3.ctx, cfgM3)
+    const capM3 = makeAgent('captain-M3', wsM3)
+    await state.createTeamDir(rootM3, {
+      name: 'r-off', id: 'r-off', captainSessionId: 'captain-M3', createdAt: now,
+      members: [],
+      tasks: [{ id: 't1', subject: 'Review 3', kind: 'review', description: 'review of t0', status: 'in_progress', dependencies: [], attempt: 0, createdAt: now, updatedAt: now }],
+      taskSeq: 1, phase: 'running',
+    })
+    await toolOf(mM3.registered, 'teamsx_update_task').execute(
+      { task_id: 't1', status: 'failed', verdict: 'needs_revision', findings: [{ id: 'f3', severity: 'high', problem: 'p', requiredFix: 'q' }] },
+      { agent: capM3, signal: SIGNAL() },
+    )
+    const teamM3 = await state.readTeam(rootM3, 'r-off')
+    const offCount = teamM3.tasks.filter((t) => t.kind === 'repair').length
+    check('M8', 'autoDerive=false 时不派生 repair', offCount === 0, `repair count=${offCount}`)
+  }
+
+  // ══════════════════ N Web 计划编辑面(v0.2 阶段二) ══════════════════
+  group('N Web 计划编辑面(批量 mutation 白名单校验)')
+  {
+    let ok
+    let n1Detail = 'parse threw'
+    try {
+      ok = await toolsMod.parseStagedPlanMutations([
+        { action: 'update_member', memberName: 'w', provider: 'p', model: 'm', role: null },
+        { action: 'update_task', taskId: 't1', subject: 's', assignee: null, dependencies: ['t0'] },
+        { action: 'add_task', subject: 's2', dependencies: [] },
+        { action: 'remove_task', taskId: 't9' },
+        { action: 'remove_member', memberName: 'g' },
+      ])
+      n1Detail = `length=${ok.length}`
+    } catch (error) {
+      n1Detail = String(error?.message ?? error)
+    }
+    check('N1', '五种合法 mutation 全部通过且顺序保留', Array.isArray(ok) && ok.length === 5, n1Detail)
+    await expectError('N2', '未知 action 拒绝(不得落入 remove_member 分支)', () => toolsMod.parseStagedPlanMutations([{ action: 'updat_member', memberName: 'w', provider: 'p', model: 'm' }]), 'unknown action "updat_member"')
+    await expectError('N3', '空批量/非数组拒绝', () => toolsMod.parseStagedPlanMutations([]), 'at least one staged plan operation')
+    await expectError('N4', '缺必填字段拒绝', () => toolsMod.parseStagedPlanMutations([{ action: 'update_task', taskId: 't1', dependencies: [] }]), '"subject" must be a non-empty string')
+    await expectError('N5', 'dependencies 非字符串数组拒绝', () => toolsMod.parseStagedPlanMutations([{ action: 'add_task', subject: 's', dependencies: [1, 2] }]), 'must be an array of strings')
+    await expectError('N6', '超过 64 条拒绝', () => toolsMod.parseStagedPlanMutations(Array.from({ length: 65 }, (_, i) => ({ action: 'remove_task', taskId: `t${i}` }))), 'limit 64')
+  }
+
+  // ══════════════════ O 会话内卡片折叠逻辑(v0.2) ══════════════════
+  group('O 会话内卡片(teamsx/* 事件折叠)')
+  {
+    const cardState = await import(join(root, 'lib', 'client', 'card-state.js'))
+
+    check('O1', 'match: team-created → start,其余 → update,未知/缺 teamId → null',
+      cardState.teamsXCardMatchRole('teamsx/team-created', { teamId: 'a' })?.role === 'start'
+      && cardState.teamsXCardMatchRole('teamsx/task-updated', { teamId: 'a' })?.role === 'update'
+      && cardState.teamsXCardMatchRole('unrelated/event', {}) === null
+      && cardState.teamsXCardMatchRole('teamsx/team-approved', {}) === null)
+    check('O2', 'start: 显式 phase=running 尊重,缺省 staged',
+      cardState.teamsXCardStart({ teamId: 'a', name: 'n', phase: 'running' }).phase === 'running'
+      && cardState.teamsXCardStart({ teamId: 'a', name: 'n' }).phase === 'staged')
+
+    let state = cardState.teamsXCardStart({ teamId: 'alpha', name: 'alpha team', captainSessionId: 'cap-1' })
+    const fold = (eventType, data) => {
+      state = cardState.teamsXCardUpdate(state, eventType, data)
+      return state
+    }
+    check('O3', 'approved → running', fold('teamsx/team-approved', { teamId: 'alpha' }).phase === 'running')
+    const withMember = fold('teamsx/member-added', { teamId: 'alpha', memberId: 'child-9', name: 'worker', role: 'dev' })
+    check('O4', 'member-added 折叠成员并保留 childId(memberId)',
+      withMember.members.length === 1 && withMember.members[0].childId === 'child-9' && withMember.members[0].role === 'dev')
+    const withTask = fold('teamsx/task-created', { teamId: 'alpha', taskId: 't1', subject: 'ship', assignee: 'worker' })
+    check('O5', 'task-created 折叠任务(pending + assignee)',
+      withTask.tasks.length === 1 && withTask.tasks[0].status === 'pending' && withTask.tasks[0].assignee === 'worker')
+    check('O6', 'task-updated 更新状态', fold('teamsx/task-updated', { teamId: 'alpha', taskId: 't1', status: 'completed' }).tasks[0].status === 'completed')
+    check('O7', 'member-removed 按 memberId 标记 removed', fold('teamsx/member-removed', { teamId: 'alpha', memberId: 'child-9' }).members[0].status === 'removed')
+    check('O8', 'halted/resumed 翻转 halted', fold('teamsx/team-halted', { teamId: 'alpha' }).halted === true && fold('teamsx/team-resumed', { teamId: 'alpha' }).halted === false)
+    check('O9', 'deleted/plan-discarded → phase=deleted', fold('teamsx/plan-discarded', { teamId: 'alpha' }).phase === 'deleted')
+    check('O10', 'message-sent 不改变状态且 update 永不返回 undefined',
+      fold('teamsx/message-sent', { teamId: 'alpha' }) === state && state !== undefined && state.tasks.length === 1)
+  }
 } finally {
   // 保留沙盒供排查失败;确认稳定后可开启自动清理:
   await rm(sandbox, { recursive: true, force: true }).catch(() => undefined)

@@ -24,7 +24,7 @@ export type TeamsXEventType =
 
 /** Payload shapes for the TeamsX session events. */
 export interface TeamsXEventMap {
-  'teamsx/team-created': { teamId: string; captainSessionId: string; name: string; description?: string }
+  'teamsx/team-created': { teamId: string; captainSessionId: string; name: string; description?: string; phase?: 'staged' | 'running' }
   'teamsx/team-approved': { teamId: string; members: number; tasks: number }
   'teamsx/team-halted': { teamId: string; cancelledTasks: number }
   'teamsx/team-resumed': { teamId: string; reason: string }

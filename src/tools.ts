@@ -43,11 +43,13 @@ import {
 import { appendTeamEvent, captainSessionOf } from './events.ts'
 import {
   evaluateQualityCompletion,
+  isQualityKind,
   normalizeBlankOptionalTaskFields,
   taskKindOf,
   transitionError,
   validateCreateTask,
 } from './quality.ts'
+import { verdictRequiresRepair } from './scheduler.ts'
 import {
   deliverToMember,
   installRetiredMemberGuard,
@@ -60,9 +62,17 @@ import {
   validateMemberLlmSelections,
   type MemberRuntimeConfig,
 } from './members.ts'
+import type { StagedPlanMutation } from './snapshot-types.ts'
 import type { AcceptanceResult, CommandResult, ReviewFinding, ReviewVerdict, TeamMember, TeamState, TeamTask } from './types.ts'
 import { TERMINAL_TASK_STATUSES } from './types.ts'
 import { installTeamScheduler } from './scheduler.ts'
+import {
+  parseProfileInvocation,
+  resolveTeamProfile,
+  resolveProfileTaskPlanning,
+  formatProfilesForPrompt,
+  type NormalizedTeamProfile,
+} from './profiles.ts'
 
 /** Resolved plugin config consumed by the tools. */
 export interface ToolsConfig {
@@ -80,36 +90,91 @@ export interface ToolsConfig {
   memberMaxDepth?: number
   /** Team size cap (members). */
   maxMembers: number
+  /** Named team profile templates. */
+  profiles?: Record<string, import('./profiles.ts').TeamProfileConfig>
+  /** Automatic repair loop config. */
+  repairLoop?: import('./scheduler.ts').RepairLoopConfig
 }
 
-/** Browser/UI mutations allowed while a plan is waiting for approval. */
-export type StagedPlanMutation =
-  | {
-      action: 'update_member'
-      memberName: string
-      role?: string | null
-      provider: string
-      model: string
-      reasoningEffort?: string | null
-      executionPrompt?: string | null
+/** Re-exported from the zero-import snapshot module so the client editor can
+ * share the exact mutation vocabulary without importing the host graph. */
+export type { StagedPlanMutation } from './snapshot-types.ts'
+
+/** Hard cap on one browser edit batch. */
+export const MAX_STAGED_PLAN_MUTATIONS = 64
+
+/**
+ * Strict runtime validation for browser-supplied staged-plan mutations.
+ *
+ * Unknown actions MUST be rejected here: the batch runner's final else-branch
+ * treats any unrecognized action as remove_member, so a typo from the web
+ * plane must never reach it. The web route cannot rely on TypeScript for this
+ * boundary — the payload arrives as parsed JSON.
+ */
+export function parseStagedPlanMutations(input: unknown): StagedPlanMutation[] {
+  if (!Array.isArray(input) || input.length === 0) {
+    throw new Error('at least one staged plan operation is required')
+  }
+  if (input.length > MAX_STAGED_PLAN_MUTATIONS) {
+    throw new Error(`too many staged plan operations in one batch (limit ${MAX_STAGED_PLAN_MUTATIONS})`)
+  }
+  const nonEmpty = (value: unknown, label: string, index: number): string => {
+    if (typeof value !== 'string' || value.trim() === '') {
+      throw new Error(`mutation ${index}: "${label}" must be a non-empty string`)
     }
-  | {
-      action: 'update_task'
-      taskId: string
-      subject: string
-      description?: string | null
-      assignee?: string | null
-      dependencies: string[]
+    return value
+  }
+  const optionalStringOrNull = (value: unknown): string | null | undefined => (
+    value === null ? null : typeof value === 'string' && value.trim() !== '' ? value : undefined
+  )
+  const dependencies = (value: unknown, index: number): string[] => {
+    if (!Array.isArray(value) || value.some((item) => typeof item !== 'string')) {
+      throw new Error(`mutation ${index}: "dependencies" must be an array of strings`)
     }
-  | {
-      action: 'add_task'
-      subject: string
-      description?: string | null
-      assignee?: string | null
-      dependencies: string[]
+    return value as string[]
+  }
+  return input.map((raw, index) => {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) {
+      throw new Error(`mutation ${index} is not an object`)
     }
-  | { action: 'remove_task'; taskId: string }
-  | { action: 'remove_member'; memberName: string }
+    const mutation = raw as Record<string, unknown>
+    switch (mutation['action']) {
+      case 'update_member':
+        return {
+          action: 'update_member' as const,
+          memberName: nonEmpty(mutation['memberName'], 'memberName', index),
+          provider: nonEmpty(mutation['provider'], 'provider', index),
+          model: nonEmpty(mutation['model'], 'model', index),
+          role: optionalStringOrNull(mutation['role']),
+          reasoningEffort: optionalStringOrNull(mutation['reasoningEffort']),
+          executionPrompt: optionalStringOrNull(mutation['executionPrompt']),
+        }
+      case 'update_task':
+        return {
+          action: 'update_task' as const,
+          taskId: nonEmpty(mutation['taskId'], 'taskId', index),
+          subject: nonEmpty(mutation['subject'], 'subject', index),
+          assignee: optionalStringOrNull(mutation['assignee']),
+          description: optionalStringOrNull(mutation['description']),
+          dependencies: dependencies(mutation['dependencies'], index),
+        }
+      case 'add_task':
+        return {
+          action: 'add_task' as const,
+          subject: nonEmpty(mutation['subject'], 'subject', index),
+          assignee: optionalStringOrNull(mutation['assignee']),
+          description: optionalStringOrNull(mutation['description']),
+          dependencies: dependencies(mutation['dependencies'], index),
+        }
+      case 'remove_task':
+        return { action: 'remove_task' as const, taskId: nonEmpty(mutation['taskId'], 'taskId', index) }
+      case 'remove_member':
+        return { action: 'remove_member' as const, memberName: nonEmpty(mutation['memberName'], 'memberName', index) }
+      default:
+        throw new Error(`mutation ${index} has unknown action ${JSON.stringify(mutation['action'])}`)
+    }
+  })
+}
 
 /** Runtime bridge shared by model-facing tools and the Web surface. */
 export interface TeamsXRuntime {
@@ -422,7 +487,11 @@ export function stagedPlanFeedbackContext(teamName: string): string {
  */
 export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRuntime {
   installRetiredMemberGuard(ctx, config.stateDir)
-  const scheduler = installTeamScheduler(ctx, { stateDir: config.stateDir, executionPrompt: config.executionPrompt })
+  const scheduler = installTeamScheduler(ctx, {
+    stateDir: config.stateDir,
+    executionPrompt: config.executionPrompt,
+    repairLoop: config.repairLoop,
+  })
   const memberSelections = installMemberSelectionRuntime(ctx, config.stateDir, (workspace, teamId, memberName) => (
     scheduler.kickMember(workspace, teamId, memberName)
   ))
@@ -667,10 +736,10 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
   // ── teamsx_create ──
   ctx.tools.register(defineTool({
     name: 'teamsx_create',
-    description: 'Create a team. Use approval=required for a two-phase plan: members and tasks remain unspawned/unclaimed until the user reviews the plan and explicitly approves it. approval=automatic starts immediately (members still need to be added).',
+    description: 'Create a team. Use approval=required for a two-phase plan: members and tasks remain unspawned/unclaimed until the user reviews the plan and explicitly approves it. approval=automatic starts immediately (members still need to be added). Pass profile=template-name to instantiate from a configured template.',
     parameters: {
       name: { type: 'string', required: true, description: 'Name for the new team (used as its stable id).' },
-      description: { type: 'string', description: 'Team purpose / the goal the team will work on.' },
+      description: { type: 'string', description: 'Team purpose / the goal the team will work on. Can include profile=template-name to use a configured template.' },
       approval: {
         type: 'string',
         enum: ['required', 'automatic'],
@@ -703,6 +772,14 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
       if (teamName === '') throw new Error('team name must not be empty')
       const teamId = sanitizeKey(teamName)
       const staged = args.approval === 'required'
+
+      // Parse profile invocation from description if present
+      const invocation = parseProfileInvocation(args.description ?? '')
+      let profile: NormalizedTeamProfile | undefined
+      if (invocation.profile && config.profiles) {
+        profile = resolveTeamProfile(config.profiles, invocation.profile, config.maxMembers)
+      }
+
       const created = await withTeamLock(captainLockKey(stateRoot, captain.id), async () => {
         // Authoritative scan, not the reverse-index cache: the index can
         // drift (restart, crash, hand edit) and silently waive the
@@ -718,15 +795,41 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
           if (existing !== undefined) {
             throw new Error(`team id "${teamId}" is taken by another captain — pick a different team name`)
           }
+          const now = Date.now()
+          // Seed members and tasks from profile if provided
+          const members = profile?.members.map((m) => ({
+            id: '',
+            name: m.name,
+            role: m.role,
+            provider: m.provider,
+            model: m.model,
+            reasoningEffort: m.reasoningEffort,
+            executionPrompt: m.executionPrompt,
+            fallback: m.fallback,
+            joinedAt: now,
+            status: 'idle' as const,
+          })) ?? []
+          const taskSeq = profile?.tasks.length ?? 0
+          const tasks = profile?.tasks.map((t) => ({
+            id: t.id,
+            subject: t.subject,
+            description: t.description,
+            status: 'pending' as const,
+            assignee: t.assignee,
+            dependencies: [...t.dependencies],
+            attempt: 0,
+            createdAt: now,
+            updatedAt: now,
+          })) ?? []
           const state: TeamState = {
             name: teamName,
             id: teamId,
-            description: args.description,
+            description: invocation.goal || args.description,
             captainSessionId: captain.id,
-            createdAt: Date.now(),
-            members: [],
-            tasks: [],
-            taskSeq: 0,
+            createdAt: now,
+            members,
+            tasks,
+            taskSeq,
             ...staged ? { phase: 'staged' as const, planReviewState: 'awaiting_review' as const } : {},
           }
           await createTeamDir(stateRoot, state)
@@ -744,6 +847,9 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
         teamId: created.id,
         captainSessionId: captain.id,
         name: created.name,
+        // Automatic teams never emit team-approved, so the conversation card
+        // needs the phase right at creation.
+        phase: staged ? 'staged' : 'running',
         ...created.description !== undefined ? { description: created.description } : {},
       })
       return {
@@ -1525,6 +1631,8 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
           }
           return {
             task_id: task.id,
+            taskKind: taskKindOf(task),
+            taskVerdict: task.verdict,
             status: task.status,
             attempt: task.attempt ?? 0,
             ...task.attemptId === undefined ? {} : { attempt_id: task.attemptId },
@@ -1571,6 +1679,8 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
         })
         return {
           task_id: task.id,
+          taskKind: taskKindOf(task),
+          taskVerdict: task.verdict,
           status: task.status,
           attempt: task.attempt ?? 0,
           ...task.attemptId === undefined ? {} : { attempt_id: task.attemptId },
@@ -1578,6 +1688,10 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
         }
       })
       await scheduler.kickTeam(workspace, team.id, team.captainSessionId === caller.id ? caller : undefined)
+      // Trigger repair loop for failed quality tasks
+      if (isQualityKind(updated.taskKind) && verdictRequiresRepair(updated.taskVerdict)) {
+        await scheduler.triggerRepairLoop(workspace, team.id, updated.task_id)
+      }
       return updated
     },
   }))

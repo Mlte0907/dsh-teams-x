@@ -58,11 +58,22 @@ const plugin = spec.factory(moduleRequire)
 console.log('apply/inject exports:', typeof plugin.apply, JSON.stringify(plugin.inject))
 
 // ── apply against a mock client ctx ──
-const registered = { locale: [], slots: [] }
+const registered = { locale: [], slots: [], conversationDefs: [], commands: [] }
+const mockServices = {
+  commandUi: {
+    register(contribution) {
+      registered.commands.push(contribution?.name)
+      console.log(`command registered: /${contribution?.name} (${contribution?.ui?.kind})`)
+    },
+  },
+}
 const mockCtx = {
   effect(fn, label) {
     fn()
     console.log('effect:', label)
+  },
+  inject(deps, fn) {
+    fn({ get: (name) => mockServices[name] })
   },
   locale: {
     register(ns, dicts) {
@@ -85,8 +96,22 @@ const mockCtx = {
       return () => {}
     },
   },
+  uiConversation: {
+    events: {
+      register(definition) {
+        registered.conversationDefs.push(definition?.kind)
+        console.log(`conversation definition registered: ${definition?.kind} (target ${definition?.target})`)
+      },
+    },
+  },
 }
 plugin.apply(mockCtx)
+if (!registered.conversationDefs.includes('teamsx')) {
+  throw new Error('teamsx conversation definition was not registered')
+}
+if (!registered.commands.includes('teamsx')) {
+  throw new Error('/teamsx command contribution was not registered')
+}
 
 // ── server-render the panel to catch render crashes ──
 // SSR skips effects, so the panel starts with empty state and must render
@@ -105,4 +130,47 @@ if (emptyHtml.trim() !== '') {
   throw new Error(`badge must be hidden for a session without teams, got ${emptyHtml.length} chars`)
 }
 console.log('session without teams renders no badge (PASS)')
+
+// ── SSR the in-chat team card to catch render crashes ──
+const { TeamsXCardPanel } = await import('../lib/client/TeamsXCardPanel.js')
+const cardNode = {
+  key: 'k1',
+  kind: 'teamsx-card',
+  id: 'alpha-team',
+  target: 'chat',
+  data: {
+    name: 'alpha team',
+    captainSessionId: 'cap-1',
+    phase: 'running',
+    halted: false,
+    members: [
+      { name: 'worker', childId: 'child-9', status: 'active' },
+      { name: 'gone', status: 'removed' },
+    ],
+    tasks: [
+      { id: 't1', subject: 'Ship it', status: 'completed' },
+      { id: 't2', subject: 'Review', status: 'pending' },
+    ],
+  },
+}
+const cardHtml = renderToString(React.createElement(TeamsXCardPanel, {
+  node: cardNode,
+  t,
+  openMember: () => {},
+}))
+if (!cardHtml.includes('alpha team') || !cardHtml.includes('worker') || !cardHtml.includes('Ship it')) {
+  throw new Error(`team card render is missing expected content (${cardHtml.length} chars)`)
+}
+console.log('team card SSR renders roster and tasks (PASS)')
+
+// A card without data must render nothing (defensive against drift).
+const emptyCardHtml = renderToString(React.createElement(TeamsXCardPanel, {
+  node: { key: 'k2', kind: 'teamsx-card', id: 'x', target: 'chat', data: { name: '' } },
+  t,
+  openMember: () => {},
+}))
+if (emptyCardHtml.trim() !== '') {
+  throw new Error(`unnamed card must render nothing, got ${emptyCardHtml.length} chars`)
+}
+console.log('unnamed card renders nothing (PASS)')
 console.log('client bundle smoke test: PASS (load + apply + render)')

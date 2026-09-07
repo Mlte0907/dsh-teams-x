@@ -23,6 +23,12 @@ importers:
       '@deepseek-ai/dsh-client-locale':
         specifier: link:./deepseek-harness/packages/client/locale
         version: link:deepseek-harness/packages/client/locale
+      '@deepseek-ai/dsh-client-ui-chat':
+        specifier: link:./deepseek-harness/packages/client/ui-chat
+        version: link:deepseek-harness/packages/client/ui-chat
+      '@deepseek-ai/dsh-client-ui-commands':
+        specifier: link:./deepseek-harness/packages/client/ui-commands
+        version: link:deepseek-harness/packages/client/ui-commands
       '@deepseek-ai/dsh-client-ui-conversation':
         specifier: link:./deepseek-harness/packages/client/ui-conversation
         version: link:deepseek-harness/packages/client/ui-conversation
