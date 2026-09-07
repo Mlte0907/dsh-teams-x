@@ -1,9 +1,9 @@
 # TeamsX 插件验收文档(含交接)
 
-**版本**: v0.1.0(tag / [npm](https://www.npmjs.com/package/dsh-teams-x) / [Release](https://github.com/Mlte0907/dsh-teams-x/releases/tag/v0.1.0) 已发布)
+**版本**: v0.2.0(tag / [npm](https://www.npmjs.com/package/dsh-teams-x) / [Release](https://github.com/Mlte0907/dsh-teams-x/releases/tag/v0.2.0) 已发布)
 **宿主**: DeepSeek Harness 0.1.3-alpha.1(源码 checkout + 本地补丁栈)
 **验收环境**: DSH 桌面端 + 桌面浏览器(1280px)+ 远程移动端(430px)
-**最后更新**: 2026-09-07(并入 157 用例全功能测试、三个缺陷修复、真实会话冒烟、CI 与发布工程、开发交接、v0.2 可行性审阅、**阶段一三实现**、**v0.2 功能用例入套件 L/M 组**)
+**最后更新**: 2026-09-07(并入 173 用例全功能测试、三个缺陷修复、真实会话冒烟、CI 与发布工程、开发交接、v0.2 可行性审阅、**阶段一二三实现**、**会话内卡片与 /teamsx 命令**、**v0.2.0 发布**、**上游 PR 分支就绪**)
 
 ---
 
@@ -288,7 +288,7 @@ npm 凭据(可 bypass 2FA 的 granular token)在 `~/.npmrc`;泄露时去 npmjs.c
 
 ---
 
-*文档生成:2026-09-07 · 证据链:143 用例套件 `scripts/full-functional-test.mjs` · 测试报告 `/home/xiaoxin/teamsx-full-test-report-2026-09-06.md` · 根因报告 `/home/xiaoxin/dsh-model-switch-issue-draft.md` · 冒烟会话 session-4e0cacfb / 3b59d56c / 474f9fdf*
+*文档生成:2026-09-07 · 证据链:173 用例套件 `scripts/full-functional-test.mjs` · 测试报告 `/home/xiaoxin/teamsx-full-test-report-2026-09-06.md` · 根因报告 `/home/xiaoxin/dsh-model-switch-issue-draft.md` · 冒烟会话 session-4e0cacfb / 3b59d56c / 474f9fdf*
 
 ---
 
@@ -775,7 +775,7 @@ pnpm build      # ✅ success
 | 项目 | 优先级 | 说明 |
 |------|--------|------|
 | ~~阶段二 Web 编辑器 UI~~ | ~~中~~ | ✅ **已完成(2026-09-07)**：StagedPlanEditor 组件 + `/plan` edit 路由 + 白名单校验 + N 组 6 用例；依赖编辑沿用行内 deps 输入 + 既有 TaskRow depth-lane 可视化 |
-| registerContinuableSetup 上游化 | 高 | 补丁需提交上游 PR，解锁 CI strict typecheck |
+| registerContinuableSetup 上游化 | 高 | ✅ 分支已推 fork（`Mlte0907/deepseek-harness@feat/register-continuable-setup`，commit `54fbd25d31`，基于上游 master 顶端零冲突 cherry-pick，单包 typecheck 通过）；**PR 网页创建因作者网络暂缓**（compare 直达链与文案已备，创建后由上游 CI 兜底全仓 typecheck） |
 | ~~会话内团队卡片~~ | ~~中~~ | ✅ **已实施(2026-09-07，见 §10.6)**：零 harness 改动，ui-workflow-run 模式 + 特性探测降级；另附 `/teamsx` 斜杠命令 |
 
 ### 10.5 阶段二实现记录(2026-09-07)
@@ -812,4 +812,16 @@ pnpm build      # ✅ success
 
 ---
 
-*文档更新:2026-09-07 · v0.2 迭代规划阶段一和三已实现*
+### 10.7 v0.2.0 发布记录(2026-09-07)
+
+| 项 | 结果 |
+|---|---|
+| `pnpm verify` 全链 | ✅ typecheck(host+client) + build + smoke(含卡片 SSR 与空态防御) + flow + **173/173** + icons |
+| npm | ✅ `dsh-teams-x@0.2.0`（78 文件，latest）—— [npm](https://www.npmjs.com/package/dsh-teams-x) |
+| git | ✅ tag `v0.2.0` + master（`accc7e8..1217ddf`，含 README 双语 v0.2 段） |
+| GitHub Release | ✅ [releases/tag/v0.2.0](https://github.com/Mlte0907/dsh-teams-x/releases/tag/v0.2.0)（英文 notes + `dsh-teams-x-0.2.0.tgz` 附件） |
+| 上游 PR | 分支就绪见 §10.4；创建动作因网络暂缓，完成后由上游 CI 兜底全仓 typecheck |
+
+---
+
+*文档更新:2026-09-07 · v0.2.0 已发布(npm/tag/Release);阶段一二三 + 会话内卡片 + /teamsx 命令全部实现并入库*
