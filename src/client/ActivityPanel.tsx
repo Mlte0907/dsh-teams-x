@@ -186,6 +186,8 @@ function usePanelPlacement(
           panel.style.right = `${candidate}px`
           const r = panel.getBoundingClientRect()
           if (r.width === 0) break
+          // Bounds check: never push the panel past the left edge of the viewport.
+          if (r.left < 8) break
           const probeY = Math.min(r.top + 20, window.innerHeight - 1)
           const topEl = document.elementFromPoint(r.left + Math.min(60, r.width / 2), probeY)
           if (topEl === null || panel === topEl || panel.contains(topEl)) {
@@ -199,7 +201,19 @@ function usePanelPlacement(
     }
     place()
     window.addEventListener('resize', place)
-    return () => { window.removeEventListener('resize', place) }
+    let resizeObserver: ResizeObserver | undefined
+    const badgeEl = badgeRef.current
+    if (badgeEl !== null && typeof ResizeObserver !== 'undefined') {
+      const parent = badgeEl.offsetParent
+      if (parent !== null) {
+        resizeObserver = new ResizeObserver(() => place())
+        resizeObserver.observe(parent)
+      }
+    }
+    return () => {
+      window.removeEventListener('resize', place)
+      resizeObserver?.disconnect()
+    }
   }, [badgeRef, panelRef, expanded])
   return pos
 }
