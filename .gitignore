@@ -7,3 +7,6 @@ deepseek-harness
 
 # 本地交接文档不发布(内容已并入 ACCEPTANCE.md §六)
 HANDOFF.md
+
+# TeamsX 运行时状态（团队快照/信箱/归档），不入库
+.teams-x/
