@@ -173,4 +173,62 @@ if (emptyCardHtml.trim() !== '') {
   throw new Error(`unnamed card must render nothing, got ${emptyCardHtml.length} chars`)
 }
 console.log('unnamed card renders nothing (PASS)')
+
+// ── open-request channel ack behavior ──
+const { requestTeamsXPanel, onTeamsXPanelRequest, onTeamsXPanelUnclaimed } = await import('../lib/client/open-request.js')
+let claimedByListener = false
+const unsubClaim = onTeamsXPanelRequest((target) => {
+  if (target === 'test-session') {
+    claimedByListener = true
+    return true
+  }
+  return false
+})
+const claimed = requestTeamsXPanel('test-session')
+if (!claimed || !claimedByListener) {
+  throw new Error(`ack: requestTeamsXPanel should return true when a listener claims, got claimed=${claimed}`)
+}
+unsubClaim()
+const claimedAfterUnsub = requestTeamsXPanel('test-session')
+if (claimedAfterUnsub) {
+  throw new Error('ack: requestTeamsXPanel should return false after listener unsubscribed')
+}
+console.log('open-request ack: claimed=true with listener, false after unsubscribe (PASS)')
+
+// ── unclaimed channel fires when nobody claims ──
+let unclaimedReceived = undefined
+const unsubUnclaimed = onTeamsXPanelUnclaimed((sessionId) => {
+  unclaimedReceived = sessionId
+})
+const claimedNoListener = requestTeamsXPanel('no-panel-session')
+if (claimedNoListener) {
+  throw new Error('unclaimed: requestTeamsXPanel should return false with no listeners')
+}
+if (unclaimedReceived !== 'no-panel-session') {
+  throw new Error(`unclaimed: listener should receive sessionId, got ${unclaimedReceived}`)
+}
+unsubUnclaimed()
+const unclaimedAfterUnsub = requestTeamsXPanel('no-panel-session')
+if (unclaimedReceived !== 'no-panel-session') {
+  throw new Error('unclaimed: listener should not fire after unsubscribe')
+}
+console.log('unclaimed channel: fires on no-claim, silent after unsubscribe (PASS)')
+
+// ── hint host slot registration ──
+if (!registered.slots.includes('sidebar.footer.action')) {
+  throw new Error(`hint host: sidebar.footer.action slot not registered, got ${registered.slots.join(', ')}`)
+}
+console.log('hint host slot registered: sidebar.footer.action (PASS)')
+
+// ── hint host SSR safety (visible=false → renders nothing) ──
+const { TeamsXHintHost } = await import('../lib/client/hint-host.js')
+const hintHtml = renderToString(React.createElement(TeamsXHintHost, {
+  wide: true,
+  t,
+}))
+if (hintHtml.trim() !== '') {
+  throw new Error(`hint host SSR must render nothing (visible=false), got ${hintHtml.length} chars`)
+}
+console.log('hint host SSR renders nothing when visible=false (PASS)')
+
 console.log('client bundle smoke test: PASS (load + apply + render)')

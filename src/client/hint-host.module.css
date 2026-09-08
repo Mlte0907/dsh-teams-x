@@ -1,0 +1,62 @@
+/* TeamsX empty-state hint overlay (CSS Modules; compiled inline by tsdown).
+   A fixed-position toast-like surface shown when /teamsx is invoked but no
+   panel is mounted. Colors ride the harness design tokens (--dsw-alias-*)
+   so the hint follows the active light/dark theme; literals are dark-theme
+   fallbacks only. */
+
+.hint {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 480px;
+  padding: 10px 16px;
+  border-radius: 8px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--dsw-alias-label-primary, #f9fafb);
+  background: var(--dsw-alias-elevated-surface, #1e293b);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  animation: teamsx-hint-fade-in 0.2s ease-out;
+}
+
+.message {
+  flex: 1;
+  min-width: 0;
+}
+
+.close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--dsw-alias-label-secondary, #94a3b8);
+  background: transparent;
+  font-size: 16px;
+  line-height: 1;
+}
+
+.close:hover {
+  color: var(--dsw-alias-label-primary, #f9fafb);
+  background: var(--dsw-alias-press-surface, rgba(255, 255, 255, 0.08));
+}
+
+@keyframes teamsx-hint-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}

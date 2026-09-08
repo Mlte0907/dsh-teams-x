@@ -546,7 +546,11 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
   // The /teamsx slash command expands this panel for its session.
   useEffect(() => (
     onTeamsXPanelRequest((target) => {
-      if (target === sessionId) setExpanded(true)
+      if (target === sessionId) {
+        setExpanded(true)
+        return true
+      }
+      return false
     })
   ), [sessionId])
   const { teams, error, loading, reload } = useTeamData(expanded, viewMode)
@@ -605,7 +609,7 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
   // No teams in this session and no archived history: render nothing — the
   // header shows no TeamsX control at all. If archived teams exist, show the
   // badge so the user can browse history.
-  if (sessionTeams.length === 0 && !hasArchived && error === undefined) return null
+  if (sessionTeams.length === 0 && !hasArchived && error === undefined && !expanded) return null
 
   // The badge STAYS mounted while expanded (it is the anchor the panel
   // positions under, and the outside-click toggle target); the expanded

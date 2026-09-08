@@ -20,9 +20,11 @@ import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-chat/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { CommandUiContract } from '@deepseek-ai/dsh-client-ui-commands/client'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import { ActivityPanel } from './ActivityPanel.tsx'
+import { TeamsXHintHost } from './hint-host.tsx'
 import { teamsXCardDefinition } from './card-definition.tsx'
 import { TeamsXCardPanel } from './TeamsXCardPanel.tsx'
 import { requestTeamsXPanel } from './open-request.ts'
@@ -62,6 +64,7 @@ export function apply(ctx: ClientContext): void {
   }, (props) => <ActivityPanel {...props} sessions={sessions} openMember={openMember} />))
   registerConversationCard(ctx, openMember)
   registerTeamsXCommand(ctx)
+  registerPanelHintHost(ctx)
 }
 
 /**
@@ -134,5 +137,22 @@ function registerTeamsXCommand(ctx: ClientContext): void {
     })
   } catch (error: unknown) {
     console.warn('teams-x: commandUi service missing; the /teamsx command is disabled', error)
+  }
+}
+
+/**
+ * Mount the global hint host into the sidebar footer slot. Shown when
+ * `/teamsx` is invoked but no panel is mounted (e.g. home screen). Feature-
+ * detected: a host without the sidebar slot silently skips the hint.
+ */
+function registerPanelHintHost(ctx: ClientContext): void {
+  try {
+    ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
+      name: 'sidebar.footer.action',
+      id: 'teams-x-hint-host',
+      locale: TEAMSX_LOCALE_NAMESPACE,
+    }, (props) => <TeamsXHintHost {...props} />))
+  } catch (error: unknown) {
+    console.warn('teams-x: sidebar.footer.action slot unavailable; the /teamsx empty-state hint is disabled', error)
   }
 }

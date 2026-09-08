@@ -42,7 +42,8 @@
         "@deepseek-ai/dsh-client-ui-commands",
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-renderer",
-        "@deepseek-ai/dsh-api-session-controller"
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-sidebar"
       ],
       "platform": "web"
     }
@@ -134,6 +135,7 @@
     "@deepseek-ai/dsh-client-ui-layout": "link:./deepseek-harness/packages/client/ui-layout",
     "@deepseek-ai/dsh-client-ui-renderer": "link:./deepseek-harness/packages/client/ui-renderer",
     "@deepseek-ai/dsh-client-ui-session": "link:./deepseek-harness/packages/client/ui-session",
+    "@deepseek-ai/dsh-client-ui-sidebar": "link:./deepseek-harness/packages/client/ui-sidebar",
     "@deepseek-ai/dsh-client-ui-slots": "link:./deepseek-harness/packages/client/ui-slots",
     "@deepseek-ai/dsh-llm": "link:./deepseek-harness/packages/llm/llm",
     "@deepseek-ai/dsh-session": "link:./deepseek-harness/packages/core/session",

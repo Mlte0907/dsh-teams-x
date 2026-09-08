@@ -41,6 +41,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-session':
         specifier: link:./deepseek-harness/packages/client/ui-session
         version: link:deepseek-harness/packages/client/ui-session
+      '@deepseek-ai/dsh-client-ui-sidebar':
+        specifier: link:./deepseek-harness/packages/client/ui-sidebar
+        version: link:deepseek-harness/packages/client/ui-sidebar
       '@deepseek-ai/dsh-client-ui-slots':
         specifier: link:./deepseek-harness/packages/client/ui-slots
         version: link:deepseek-harness/packages/client/ui-slots

@@ -104,6 +104,8 @@ export const zh = {
   'role.designer': '设计',
   'role.operator': '运维',
   'role.data': '数据',
+  'command.panelUnavailable': '没有可响应的 TeamsX 面板 — 请先进入一个会话，再执行 /teamsx',
+  'command.hintDismiss': '关闭提示',
 }
 
 /** Locale keys are derived from the zh dictionary so a missing key is a compile error in en. */
@@ -206,4 +208,6 @@ export const en: Record<TeamsXLocaleKey, string> = {
   'role.designer': 'Designer',
   'role.operator': 'Operator',
   'role.data': 'Data',
+  'command.panelUnavailable': 'No TeamsX panel is available to respond — enter a session first, then run /teamsx',
+  'command.hintDismiss': 'Dismiss hint',
 }
