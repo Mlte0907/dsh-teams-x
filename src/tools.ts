@@ -27,7 +27,9 @@ import {
   createTeamDir,
   findTeamByParticipant,
   listTeamsForParticipant,
+  buildMemberByNameIndex,
   cancelUnfinishedTask,
+  findMemberByName,
   invalidateTaskAttempt,
   readTeam,
   recordRetiredMemberIds,
@@ -289,7 +291,8 @@ async function requireFreshParticipant(
 
 /** Look up one live (non-removed) member by display name. */
 function requireMember(team: TeamState, name: string): TeamMember {
-  const member = team.members.find((candidate) => candidate.name === name && candidate.status !== 'removed')
+  const index = buildMemberByNameIndex(team.members)
+  const member = findMemberByName(index, name)
   if (member === undefined) {
     throw new Error(`no active member named "${name}" in team "${team.name}"`)
   }

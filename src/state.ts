@@ -1061,3 +1061,19 @@ export function taskDepthsById(tasks: readonly TeamTask[]): Map<string, number> 
   for (const task of tasks) depthOf(task.id)
   return depths
 }
+
+/** Build a name → member index over live (non-removed) members for O(1) lookup. */
+export function buildMemberByNameIndex(members: readonly TeamMember[]): Map<string, TeamMember> {
+  const index = new Map<string, TeamMember>()
+  for (const member of members) {
+    if (member.status !== 'removed') {
+      index.set(member.name, member)
+    }
+  }
+  return index
+}
+
+/** O(1) member lookup by display name using a pre-built index. */
+export function findMemberByName(index: Map<string, TeamMember>, name: string): TeamMember | undefined {
+  return index.get(name)
+}
