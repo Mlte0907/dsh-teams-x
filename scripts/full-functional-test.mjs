@@ -358,6 +358,21 @@ try {
       await state.writeTeam(rootD, t2)
     })))
     check('C13', '50 并发读改写后 JSON 完整可解析', (await state.readTeam(rootD, 'sync-2'))?.description?.startsWith('write-') === true)
+
+    // 索引校验和
+    const idxFile = join(rootD, 'index.json')
+    const idxRaw = JSON.parse(await readFile(idxFile, 'utf8'))
+    check('C14', '索引文件包含 16 字符 checksum', typeof idxRaw.checksum === 'string' && idxRaw.checksum.length === 16)
+    // 篡改内容但保留旧 checksum → readIndex 检测不匹配 → 降级全扫描 → rebuildIndex 清除篡改
+    const tampered = { ...idxRaw, captains: { ...idxRaw.captains, 'fake-session': 'fake-team' } }
+    await writeFile(idxFile, JSON.stringify(tampered), 'utf8')
+    await state.findTeamByParticipant(rootD, 'cap-sync')
+    const healedIdx = JSON.parse(await readFile(idxFile, 'utf8'))
+    check('C15', '篡改索引(checksum 不匹配) → 自愈重建且 fake-session 被清除', healedIdx.captains?.['fake-session'] === undefined)
+    // 旧格式(无 checksum) → 向后兼容读取
+    const oldFormat = { captains: idxRaw.captains, members: idxRaw.members }
+    await writeFile(idxFile, JSON.stringify(oldFormat), 'utf8')
+    check('C16', '旧格式索引(无 checksum) → 向后兼容读取', (await state.findTeamByParticipant(rootD, 'cap-sync'))?.id === 'sync-1')
   }
 
   // ══════════════════ D 通知与消息推送 ══════════════════

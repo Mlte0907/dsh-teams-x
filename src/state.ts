@@ -26,6 +26,7 @@ import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
+import { tmpdir } from 'node:os'
 import {
   TERMINAL_TASK_STATUSES,
   type TaskStatus,
@@ -47,8 +48,68 @@ const MAILBOX_DELIVERY_LEASE_MS = 60_000
 /** In-process per-team mutation queues (promise chains). */
 const locks = new Map<string, Promise<unknown>>()
 
+// ── cross-process file lock (opt-in via DSH_TEAMSX_FILE_LOCK=1) ──
+
+/** Directory for lock files when cross-process locking is enabled. */
+const FILE_LOCK_DIR = join(tmpdir(), 'dsh-teams-x-locks')
+/** Give up acquiring a file lock after this total wait. */
+const FILE_LOCK_TIMEOUT_MS = 10_000
+/** Poll interval while waiting for a file lock to release. */
+const FILE_LOCK_RETRY_MS = 50
+/** A lock older than this is assumed stale (holder crashed) and reclaimed. */
+const FILE_LOCK_STALE_MS = 30_000
+/** Whether cross-process file locking is enabled. */
+const FILE_LOCK_ENABLED = process.env['DSH_TEAMSX_FILE_LOCK'] === '1'
+
+interface LockFileContent {
+  pid: number
+  createdAt: number
+}
+
 /**
- * Serialize mutations of one scope across the whole process.
+ * Acquire a cross-process file lock via atomic `wx` creation. Stale locks
+ * (holder crashed) are reclaimed after {@link FILE_LOCK_STALE_MS}. Returns
+ * a release function that removes the lock file.
+ */
+async function acquireFileLock(key: string): Promise<() => Promise<void>> {
+  await mkdir(FILE_LOCK_DIR, { recursive: true })
+  const lockPath = join(FILE_LOCK_DIR, `${keyDigest(key)}.lock`)
+  const deadline = Date.now() + FILE_LOCK_TIMEOUT_MS
+  for (;;) {
+    try {
+      const content: LockFileContent = { pid: process.pid, createdAt: Date.now() }
+      await writeFile(lockPath, JSON.stringify(content), { encoding: 'utf8', flag: 'wx' })
+      return async () => { await rm(lockPath, { force: true }).catch(() => undefined) }
+    } catch (error: unknown) {
+      if (!(error instanceof Error && 'code' in error
+        && (error as NodeJS.ErrnoException).code === 'EEXIST')) {
+        throw error
+      }
+      // Lock exists — check staleness and reclaim if the holder died.
+      try {
+        const raw = await readFile(lockPath, 'utf8')
+        const parsed = JSON.parse(raw) as LockFileContent
+        if (Date.now() - parsed.createdAt > FILE_LOCK_STALE_MS) {
+          await rm(lockPath, { force: true }).catch(() => undefined)
+          continue
+        }
+      } catch {
+        await rm(lockPath, { force: true }).catch(() => undefined)
+        continue
+      }
+      if (Date.now() >= deadline) {
+        throw new Error(`timed out acquiring file lock for key: ${key}`)
+      }
+      await sleep(FILE_LOCK_RETRY_MS)
+    }
+  }
+}
+
+/**
+ * Serialize mutations of one scope across the whole process. When
+ * `DSH_TEAMSX_FILE_LOCK=1` is set, also holds a cross-process file lock so
+ * concurrent processes sharing the same state root cannot corrupt each
+ * other's read-modify-write cycles.
  * @param key - the mutation scope (team id, retired-members root, …).
  * @param fn - the mutation to run exclusively.
  * @returns the mutation's result.
@@ -60,9 +121,11 @@ export async function withTeamLock<T>(key: string, fn: () => Promise<T>): Promis
   const tail = previous.then(() => gate)
   locks.set(key, tail)
   await previous
+  const releaseFileLock = FILE_LOCK_ENABLED ? await acquireFileLock(key) : undefined
   try {
     return await fn()
   } finally {
+    await releaseFileLock?.()
     release()
     // Delete the map entry when no later waiter chained onto this tail, so
     // finished teams do not accumulate stale promise references.
@@ -165,6 +228,15 @@ function emptyIndex(): TeamsIndex {
   return { captains: {}, members: {} }
 }
 
+/**
+ * Compute a short SHA-256 checksum over the index payload (captains + members).
+ * Stored alongside the index so {@link readIndex} can detect corruption or
+ * tampering and fall back to the self-healing directory scan.
+ */
+function computeIndexChecksum(captains: Record<string, string>, members: Record<string, string>): string {
+  return createHash('sha256').update(JSON.stringify({ captains, members })).digest('hex').slice(0, 16)
+}
+
 function indexMemberOf(state: TeamState): TeamsIndex {
   const index = emptyIndex()
   index.captains[state.captainSessionId] = state.id
@@ -175,8 +247,9 @@ function indexMemberOf(state: TeamState): TeamsIndex {
 }
 
 async function writeIndex(stateRoot: string, index: TeamsIndex): Promise<void> {
+  const checksum = computeIndexChecksum(index.captains, index.members)
   await mkdir(stateRoot, { recursive: true })
-  await atomicWriteText(join(stateRoot, INDEX_FILE), JSON.stringify(index))
+  await atomicWriteText(join(stateRoot, INDEX_FILE), JSON.stringify({ ...index, checksum }))
 }
 
 async function readIndex(stateRoot: string): Promise<TeamsIndex | undefined> {
@@ -187,7 +260,16 @@ async function readIndex(stateRoot: string): Promise<TeamsIndex | undefined> {
     const record = parsed as Record<string, unknown>
     if (typeof record['captains'] !== 'object' || record['captains'] === null) return undefined
     if (typeof record['members'] !== 'object' || record['members'] === null) return undefined
-    return { captains: record['captains'] as TeamsIndex['captains'], members: record['members'] as TeamsIndex['members'] }
+    const captains = record['captains'] as TeamsIndex['captains']
+    const members = record['members'] as TeamsIndex['members']
+    // Checksum verification: a mismatch means the file was corrupted or
+    // tampered with — treat as unreadable so the caller self-heals by scan.
+    // Old index files without a checksum are read as-is (backward compatible).
+    const storedChecksum = record['checksum']
+    if (typeof storedChecksum === 'string' && storedChecksum !== computeIndexChecksum(captains, members)) {
+      return undefined
+    }
+    return { captains, members }
   } catch {
     return undefined
   }
