@@ -102,6 +102,8 @@ export interface MemberSelectionRuntime {
     selection: MemberLlmSelection,
     operation: () => Promise<T>,
   ): Promise<T>
+  /** Uninstall the session-start/disposed listeners and every per-child install. */
+  dispose(): void
 }
 
 const FALLBACK_FAILURE_CODES = new Set(['QUOTA', 'RATE_LIMIT', 'AUTH', 'MISSING_CREDENTIAL', 'NO_ADAPTER'])
@@ -288,9 +290,22 @@ export function installMemberSelectionRuntime(
   onFailureSettled?: (workspace: string, teamId: string, memberName: string) => Promise<void>,
 ): MemberSelectionRuntime {
   const pending = new Map<string, MemberLlmSelection>()
-  ctx.subagents.registerContinuableSetup((childCtx) => {
-    const child = childCtx.agent
-    if (child === undefined) return () => undefined
+  // dsh >= 0.1.5 removed the plugin-facing continuable-setup hook. The
+  // supported replacement is `agent/session-start`: it fires after
+  // composition/setup (so the subagent descriptor is already in the session
+  // log) and before the loop starts, for both fresh children (`startup`) and
+  // cold-resumed ones (`resume`). `payload.agent.ctx` is the agent-scoped
+  // context `installModelSelection` needs.
+  const installed = new Map<string, () => void>()
+  const disposeDisposed = ctx.on('agent/disposed', (payload) => {
+    const id = payload?.agent?.id
+    if (id !== undefined) installed.delete(id)
+  })
+  const disposeSessionStart = ctx.on('agent/session-start', (payload) => {
+    const child = payload?.agent
+    const childCtx = child?.ctx
+    if (child === undefined || childCtx === undefined) return () => undefined
+    if (installed.has(child.id)) return () => undefined
     const suffix = sessionOwnEvents(child.session)
     const descriptor = foldSubagentDescriptor(suffix)
     if (descriptor?.mode !== 'continuable' || !descriptor.label.startsWith(MEMBER_LABEL_PREFIX)) {
@@ -315,9 +330,12 @@ export function installMemberSelectionRuntime(
       selection = selectionFromMember(durableMember)
       if (selection !== undefined
         && (descriptor.agentProvider !== durableMember?.provider || descriptor.agentModel !== durableMember?.model)) {
-        throw new Error(
+        // Never throw from an event listener: a mismatch must not take down
+        // the session start that every other listener depends on.
+        ctx.logger.warn(
           `teams-x: saved model route for member "${memberName}" does not match its subagent descriptor`,
         )
+        return () => undefined
       }
     }
 
@@ -363,7 +381,10 @@ export function installMemberSelectionRuntime(
         ctx.logger.warn(`teams-x: failed to record member turn failure: ${String(error)}`)
       }
     })
-    if (selection === undefined) return disposeFailure
+    if (selection === undefined) {
+      installed.set(child.id, disposeFailure)
+      return () => undefined
+    }
     const selectionRef = { current: modelSelection(selection), assembled: undefined as ModelSelection | undefined }
     const disposeSelection = installModelSelection(childCtx, selectionRef)
     const fallback = selection.fallback
@@ -387,11 +408,12 @@ export function installMemberSelectionRuntime(
       }
       return next()
     })
-    return () => {
+    installed.set(child.id, () => {
       disposeFallback()
       disposeSelection()
       disposeFailure()
-    }
+    })
+    return () => undefined
   })
 
   return {
@@ -411,6 +433,12 @@ export function installMemberSelectionRuntime(
       } finally {
         pending.delete(key)
       }
+    },
+    dispose() {
+      disposeSessionStart()
+      disposeDisposed()
+      for (const dispose of installed.values()) dispose()
+      installed.clear()
     },
   }
 }

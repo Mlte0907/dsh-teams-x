@@ -114,7 +114,9 @@ function registerTeamsXCommand(ctx: ClientContext): void {
         ctx.effect(
           () => command.register({
             name: 'teamsx',
-            description: 'Open the TeamsX team panel',
+            // dsh >= 0.1.5 commandUi contract: description is a lazy
+            // localized-text resolver, not a static string.
+            description: () => 'Open the TeamsX team panel',
             available: (session) => {
               const sessions = ctx.sessions as { subagentAddress?: (id: SessionId) => unknown }
               // Teammate sub-sessions have no captain panel of their own.
