@@ -1635,7 +1635,9 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
           return {
             task_id: task.id,
             taskKind: taskKindOf(task),
-            taskVerdict: task.verdict,
+            // Tool output must be lossless JSON on dsh >= 0.1.5: JSON.stringify
+            // drops `undefined` keys, so an unset verdict must be omitted.
+            ...(task.verdict === undefined ? {} : { taskVerdict: task.verdict }),
             status: task.status,
             attempt: task.attempt ?? 0,
             ...task.attemptId === undefined ? {} : { attempt_id: task.attemptId },
@@ -1683,7 +1685,7 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
         return {
           task_id: task.id,
           taskKind: taskKindOf(task),
-          taskVerdict: task.verdict,
+          ...(task.verdict === undefined ? {} : { taskVerdict: task.verdict }),
           status: task.status,
           attempt: task.attempt ?? 0,
           ...task.attemptId === undefined ? {} : { attempt_id: task.attemptId },

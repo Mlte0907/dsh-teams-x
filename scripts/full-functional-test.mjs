@@ -265,7 +265,12 @@ try {
     const claim = await toolOf(registered, 'teamsx_claim_task').execute({ task_id: t2.task_id }, m2exec)
     check('B6a', 'claim 返回 attempt_id 能力', typeof claim.attempt_id === 'string' && claim.attempt_id.length > 0)
     await expectError('B6b', '成员 claim 不能指定 assignee', () => toolOf(registered, 'teamsx_claim_task').execute({ task_id: t.task_id, assignee: 'carol' }, m2exec), 'members cannot set assignee')
-    await toolOf(registered, 'teamsx_update_task').execute({ task_id: t2.task_id, status: 'in_progress', attempt_id: claim.attempt_id }, m2exec)
+    const updInProgress = await toolOf(registered, 'teamsx_update_task').execute({ task_id: t2.task_id, status: 'in_progress', attempt_id: claim.attempt_id }, m2exec)
+    // dsh >= 0.1.5 requires lossless JSON tool output: JSON.stringify drops
+    // `undefined` keys, so an unset verdict must be omitted from the result
+    // (the live run hit "invalid output: value is not lossless JSON").
+    const updRoundTrip = JSON.parse(JSON.stringify(updInProgress))
+    check('B6c2', 'update_task 输出无损 JSON（未设 verdict 不得出现 undefined 键）', Object.keys(updRoundTrip).length === Object.keys(updInProgress).length && Object.keys(updInProgress).every((k) => k in updRoundTrip) && !('taskVerdict' in updInProgress))
     await expectError('B6c', '伪造 attempt_id 拒绝', () => toolOf(registered, 'teamsx_update_task').execute({ task_id: t2.task_id, status: 'completed', attempt_id: 'forged', output: 'x' }, m2exec), 'stale attempt for task')
     const t3 = await toolOf(registered, 'teamsx_create_task').execute({ subject: 't3' }, cexec)
     await expectError('B7a', 'pending → completed 非法迁移', () => toolOf(registered, 'teamsx_update_task').execute({ task_id: t3.task_id, status: 'completed' }, cexec), 'cannot move from "pending" to "completed"')
