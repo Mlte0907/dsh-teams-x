@@ -548,6 +548,104 @@ function TeamCard({ team, t, openMember, readOnly, onSaved }: {
   )
 }
 
+/** Props the shared activity body needs from whichever host renders it. */
+export interface TeamsXPanelBodyProps {
+  /** Session whose teams this body lists. */
+  readonly sessionId: string
+  /** Locale formatter supplied by the hosting seat. */
+  readonly t: PanelTranslate
+  /** Open one member's transcript (wired by the plugin shell). */
+  readonly openMember: (parentId: TeamActivitySnapshot['captainSessionId'], childId: string) => void
+  /**
+   * Close the hosting panel. Omitted by a host that owns its own close control
+   * (the right Sidebar's tab strip), which is also what hides the body's ✕.
+   */
+  readonly onClose?: () => void
+}
+
+/**
+ * The activity body every host shares: the live/archive toggle, refresh, the
+ * error and empty states, and the team cards. Self-contained — it owns its
+ * view mode and its polling — so the session-header dropdown, the right
+ * Sidebar tab and the main-column panel are one component with one data path.
+ */
+export function TeamsXPanelBody({ sessionId, t, openMember, onClose }: TeamsXPanelBodyProps): ReactElement {
+  const translate = useMemo(() => makeT(t), [t])
+  const [viewMode, setViewMode] = useState<'live' | 'archive'>('live')
+  // A body renders only while its host shows it, so it always polls fast.
+  const { teams, error, loading, reload } = useTeamData(true, viewMode)
+  const sessionTeams = useMemo(() => teams.filter((team) => (
+    team.captainSessionId === sessionId
+    || team.members.some((member) => member.id === sessionId)
+  )), [teams, sessionId])
+
+  return (
+    <>
+      <header className={css.panelHeader}>
+        <h2 className={css.panelTitle}><TeamsXLogo size={18} decorative /> {translate('panel.title')}</h2>
+        <div className={css.panelActions}>
+          <div className={css.modeToggle} role='radiogroup' aria-label={translate('panel.live')}>
+            <button
+              type='button'
+              className={`${css.modeOption} ${viewMode === 'live' ? css.modeActive : ''}`}
+              onClick={() => { setViewMode('live') }}
+              aria-pressed={viewMode === 'live'}
+            >
+              {translate('panel.live')}
+            </button>
+            <button
+              type='button'
+              className={`${css.modeOption} ${viewMode === 'archive' ? css.modeActive : ''}`}
+              onClick={() => { setViewMode('archive') }}
+              aria-pressed={viewMode === 'archive'}
+            >
+              {translate('panel.archived')}
+            </button>
+          </div>
+          <button
+            type='button'
+            className={css.refreshButton}
+            onClick={reload}
+            data-loading={loading === true || undefined}
+            aria-label={translate('panel.refresh')}
+            title={translate('panel.refresh')}
+          >
+            <span className={loading === true ? css.animSpin : undefined}>⟳</span>
+          </button>
+          {onClose !== undefined && (
+            <button
+              type='button'
+              className={css.refreshButton}
+              onClick={onClose}
+              aria-label={translate('panel.close')}
+              title={translate('panel.close')}
+            >
+              ✕
+            </button>
+          )}
+        </div>
+      </header>
+      {error !== undefined && (
+        <div className={css.errorBox}>
+          <p className={css.panelError}>{translate('panel.error', { message: error })}</p>
+          <button type='button' className={css.retryButton} onClick={reload}>
+            {translate('panel.refresh')}
+          </button>
+        </div>
+      )}
+      {error === undefined && sessionTeams.length === 0 && (
+        <div className={css.emptyState}>
+          <TeamsXLogo size={48} className={css.emptyLogo} />
+          <p className={css.panelEmpty}>{translate('panel.empty')}</p>
+        </div>
+      )}
+      <div className={css.teamList}>
+        {sessionTeams.map((team) => <TeamCard key={`${team.workspace}/${team.teamId}`} team={team} t={translate} openMember={openMember} readOnly={viewMode === 'archive'} onSaved={reload} />)}
+      </div>
+    </>
+  )
+}
+
 /**
  * The session-scoped shell: a header chip that exists only when THIS session
  * owns or participates in a live team; the expanded panel portals to body.
@@ -555,7 +653,6 @@ function TeamCard({ team, t, openMember, readOnly, onSaved }: {
 export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps): ReactElement | null {
   const translate = useMemo(() => makeT(t), [t])
   const [expanded, setExpanded] = useState(false)
-  const [viewMode, setViewMode] = useState<'live' | 'archive'>('live')
   const [hasArchived, setHasArchived] = useState(false)
   const badgeRef = useRef<HTMLButtonElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
@@ -570,7 +667,9 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
       return false
     })
   ), [sessionId])
-  const { teams, error, loading, reload } = useTeamData(expanded, viewMode)
+  // The badge carries the count only: once expanded, the body polls on its own
+  // fast cadence, so this subscription stays on the collapsed schedule.
+  const { teams, error } = useTeamData(false, 'live')
   // One-shot: if archived teams exist for this session, show the badge
   // even when no live teams exist — the user can browse archive history.
   useEffect(() => {
@@ -664,65 +763,12 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
           role='region'
           aria-label={translate('panel.aria')}
         >
-          <header className={css.panelHeader}>
-            <h2 className={css.panelTitle}><TeamsXLogo size={18} decorative /> {translate('panel.title')}</h2>
-        <div className={css.panelActions}>
-          <div className={css.modeToggle} role='radiogroup' aria-label={translate('panel.live')}>
-            <button
-              type='button'
-              className={`${css.modeOption} ${viewMode === 'live' ? css.modeActive : ''}`}
-              onClick={() => { setViewMode('live') }}
-              aria-pressed={viewMode === 'live'}
-            >
-              {translate('panel.live')}
-            </button>
-            <button
-              type='button'
-              className={`${css.modeOption} ${viewMode === 'archive' ? css.modeActive : ''}`}
-              onClick={() => { setViewMode('archive') }}
-              aria-pressed={viewMode === 'archive'}
-            >
-              {translate('panel.archived')}
-            </button>
-          </div>
-          <button
-                type='button'
-                className={css.refreshButton}
-                onClick={reload}
-                data-loading={loading === true || undefined}
-                aria-label={translate('panel.refresh')}
-                title={translate('panel.refresh')}
-              >
-                <span className={loading === true ? css.animSpin : undefined}>⟳</span>
-              </button>
-              <button
-                type='button'
-                className={css.refreshButton}
-                onClick={() => { setExpanded(false) }}
-                aria-label={translate('panel.close')}
-                title={translate('panel.close')}
-              >
-                ✕
-              </button>
-            </div>
-          </header>
-          {error !== undefined && (
-        <div className={css.errorBox}>
-          <p className={css.panelError}>{translate('panel.error', { message: error })}</p>
-          <button type='button' className={css.retryButton} onClick={reload}>
-            {translate('panel.refresh')}
-          </button>
-        </div>
-      )}
-      {error === undefined && sessionTeams.length === 0 && (
-        <div className={css.emptyState}>
-          <TeamsXLogo size={48} className={css.emptyLogo} />
-          <p className={css.panelEmpty}>{translate('panel.empty')}</p>
-        </div>
-      )}
-          <div className={css.teamList}>
-            {sessionTeams.map((team) => <TeamCard key={`${team.workspace}/${team.teamId}`} team={team} t={translate} openMember={openMember} readOnly={viewMode === 'archive'} onSaved={reload} />)}
-          </div>
+          <TeamsXPanelBody
+            sessionId={sessionId}
+            t={t}
+            openMember={openMember}
+            onClose={() => { setExpanded(false) }}
+          />
         </div>,
         document.body,
       )}

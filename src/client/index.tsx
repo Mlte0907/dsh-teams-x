@@ -24,6 +24,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { CommandUiContract } from '@deepseek-ai/dsh-client-ui-commands/client'
 import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import { ActivityPanel } from './ActivityPanel.tsx'
+import { registerPanelHosts } from './panel-hosts.tsx'
 import { TeamsXHintHost } from './hint-host.tsx'
 import { teamsXCardDefinition } from './card-definition.tsx'
 import { TeamsXCardPanel } from './TeamsXCardPanel.tsx'
@@ -65,6 +66,9 @@ export function apply(ctx: ClientContext): void {
   registerConversationCard(ctx, openMember)
   registerTeamsXCommand(ctx)
   registerPanelHintHost(ctx)
+  // 0.1.5-only hosts (right Sidebar tab + main-column panel). Deferred and
+  // guarded inside, so an older host simply keeps the badge-only entry.
+  registerPanelHosts(ctx, openMember)
 }
 
 /**

@@ -1593,6 +1593,20 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
         additionalProperties: false,
         properties: {
           task_id: { type: 'string', required: true },
+          // dsh 0.1.5 validates tool output strictly against this schema
+          // (`additionalProperties: false`): every key the handler returns must
+          // be declared here, optional ones included. An undeclared `taskKind`
+          // made every update_task call fail on 0.1.5-rc.1 with
+          // `"value.taskKind" is not a declared property` (2026-09-10).
+          taskKind: {
+            type: 'string',
+            description: 'Task kind: "work" (default) or one of requirements/implementation/verification/review/repair/integration.',
+          },
+          taskVerdict: {
+            type: 'string',
+            enum: ['pass', 'needs_revision', 'reject'],
+            description: 'Review verdict; present only on tasks that carry one.',
+          },
           status: { type: 'string', required: true },
           output: { type: 'string' },
           attempt: { type: 'number', required: true },

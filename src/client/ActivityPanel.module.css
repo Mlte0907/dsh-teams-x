@@ -141,6 +141,18 @@
   font-weight: 600;
 }
 
+/* Right-Sidebar tab chip: the glyph before the label, plus a trailing gutter so
+   the active chip's fade lands past the text instead of on its last glyphs
+   (panel-hosts.tsx). */
+.tabTitleIcon {
+  flex: none;
+  margin-right: 6px;
+}
+
+.tabTitleLabel {
+  padding-right: 4px;
+}
+
 /* Title-right action group: refresh + close as compact ghost icons. */
 .panelActions {
   display: inline-flex;

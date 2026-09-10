@@ -58,12 +58,35 @@ const plugin = spec.factory(moduleRequire)
 console.log('apply/inject exports:', typeof plugin.apply, JSON.stringify(plugin.inject))
 
 // ── apply against a mock client ctx ──
-const registered = { locale: [], slots: [], conversationDefs: [], commands: [] }
+const registered = { locale: [], slots: [], conversationDefs: [], commands: [], tabs: [] }
+// The renderer stub, shared by the root ctx and the services a deferred inject
+// hands back (a real fork exposes `slots` the same way, as a property).
+const slotsStub = {
+  inject(slotName, register) {
+    registered.slots.push(slotName)
+    register()
+  },
+  register(spec, component) {
+    registered.slots.push(`register:${spec.name}`)
+    console.log(`slot registered: ${spec.name} (order ${spec.order}, locale ${spec.locale})`)
+    return () => {}
+  },
+}
 const mockServices = {
+  slots: slotsStub,
   commandUi: {
     register(contribution) {
       registered.commands.push(contribution?.name)
       console.log(`command registered: /${contribution?.name} (${contribution?.ui?.kind})`)
+    },
+  },
+  // 0.1.5-rc.1 right Sidebar tab registry: the plugin registers through a
+  // deferred inject, so this stub is what exercises that path under test.
+  sidebarRightTabs: {
+    register(definition) {
+      registered.tabs.push(definition?.id)
+      console.log(`sidebar tab type registered: ${definition?.id}/${definition?.kind}, guide ${definition?.guide?.length ?? 0}`)
+      return () => {}
     },
   },
 }
@@ -73,7 +96,8 @@ const mockCtx = {
     console.log('effect:', label)
   },
   inject(deps, fn) {
-    fn({ get: (name) => mockServices[name] })
+    // A real cordis fork exposes injected services as properties (and via get).
+    fn({ get: (name) => mockServices[name], ...mockServices })
   },
   locale: {
     register(ns, dicts) {
@@ -84,18 +108,11 @@ const mockCtx = {
       const missing = keys.filter((k) => !enKeys.has(k))
       if (missing.length > 0) throw new Error(`en dictionary missing keys: ${missing.join(', ')}`)
     },
-  },
-  slots: {
-    inject(slotName, register) {
-      registered.slots.push(slotName)
-      register()
-    },
-    register(spec2, component) {
-      registered.slots.push(`register:${spec2.name}`)
-      console.log(`slot registered: ${spec2.name} (order ${spec2.order}, locale ${spec2.locale})`)
-      return () => {}
+    bind(namespace) {
+      return (key) => `${namespace}:${key}`
     },
   },
+  slots: slotsStub,
   uiConversation: {
     events: {
       register(definition) {
@@ -219,6 +236,35 @@ if (!registered.slots.includes('sidebar.footer.action')) {
   throw new Error(`hint host: sidebar.footer.action slot not registered, got ${registered.slots.join(', ')}`)
 }
 console.log('hint host slot registered: sidebar.footer.action (PASS)')
+
+// ── 0.1.5-only hosts: tab type + its two seats, panel row + main panel ──
+for (const slot of ['sidebar.panellist', 'main', 'sidebar.right.pane.tab', 'sidebar.right.pane.tab.title']) {
+  if (!registered.slots.includes(`register:${slot}`)) {
+    throw new Error(`panel hosts: ${slot} not registered, got ${registered.slots.join(', ')}`)
+  }
+}
+if (!registered.tabs.includes('teams-x')) {
+  throw new Error(`panel hosts: right Sidebar tab type not registered, got ${registered.tabs.join(', ')}`)
+}
+console.log('panel hosts registered: sidebar.panellist + main + right Sidebar tab (PASS)')
+
+// ── both hosts render without a crash (SSR) ──
+const { TeamsXTabBody, TeamsXMainPanel } = await import('../lib/client/panel-hosts.js')
+const tabHtml = renderToString(React.createElement(TeamsXTabBody, {
+  sessionId: 'session-smoke',
+  t,
+  openMember: () => {},
+}))
+if (tabHtml.trim() === '') throw new Error('tab body SSR rendered nothing')
+const mainHtml = renderToString(React.createElement(TeamsXMainPanel, {
+  t,
+  openMember: () => {},
+  useSessions: (select) => select({ current: undefined }),
+}))
+if (!mainHtml.includes('panel.pickSession')) {
+  throw new Error(`main panel without a session must render the pick-session hint, got ${mainHtml.length} chars`)
+}
+console.log('tab body + main panel SSR render (PASS)')
 
 // ── hint host SSR safety (visible=false → renders nothing) ──
 const { TeamsXHintHost } = await import('../lib/client/hint-host.js')

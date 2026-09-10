@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@deepseek-ai/dsh-client-ui-sidebar-right':
+        specifier: '>=0.1.5-rc.1'
+        version: 0.1.5-rc.1(@deepseek-ai/cordis@deepseek-harness+vendor+cordis)
     devDependencies:
       '@deepseek-ai/cordis':
         specifier: link:./deepseek-harness/vendor/cordis
@@ -124,6 +128,11 @@ packages:
   '@babel/types@8.0.4':
     resolution: {integrity: sha512-eY+Yn3dCqTGmyiq2QRU66lA5FL8lqqqvecHt0fF3uHONIa7ToYsaCiWV8lOKqAs0Rb2SjixiKFROngnulPtt2g==}
     engines: {node: ^22.18.0 || >=24.11.0}
+
+  '@deepseek-ai/dsh-client-ui-sidebar-right@0.1.5-rc.1':
+    resolution: {integrity: sha512-JFKsoWRdfX4r++DL2CbuDAgZ6Di1L3siSjcl5z6ilieFfcsN9eUHyOcZN+2WKOQtmpw374ZwrN5Z/i+coO/mCA==}
+    peerDependencies:
+      '@deepseek-ai/cordis': ^4.0.2
 
   '@emnapi/core@1.11.1':
     resolution: {integrity: sha512-RSvbQmHzdKzNsLYa/wHrbc3KN4sYLKAdPZxqiM2HATqv/SBk2/ENSHpvXGaLOMcsAyz0poEGqkmmKYG3OWiJEQ==}
@@ -575,6 +584,10 @@ snapshots:
     dependencies:
       '@babel/helper-string-parser': 8.0.0
       '@babel/helper-validator-identifier': 8.0.4
+
+  '@deepseek-ai/dsh-client-ui-sidebar-right@0.1.5-rc.1(@deepseek-ai/cordis@deepseek-harness+vendor+cordis)':
+    dependencies:
+      '@deepseek-ai/cordis': link:deepseek-harness/vendor/cordis
 
   '@emnapi/core@1.11.1':
     dependencies:
