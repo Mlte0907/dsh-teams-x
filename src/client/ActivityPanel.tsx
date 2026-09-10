@@ -342,14 +342,17 @@ function TaskRow({ task, t }: { task: TeamActivitySnapshot['tasks'][number]; t: 
       : task.assignee
   return (
     <div className={css.taskRow} data-state={task.state} data-depth={task.depth}>
-      {/* Depth lane: a colored strip indicating the dependency level */}
-      {task.depth > 0 && (
-        <span className={css.taskLane} aria-hidden>
-          {Array.from({ length: Math.min(task.depth, 4) }, (_, i) => (
-            <span key={i} className={css.taskLaneSegment} data-depth={i} />
-          ))}
-        </span>
-      )}
+      {/* Depth lane: a colored strip indicating the dependency level. The cell is
+          ALWAYS rendered, empty at depth 0, because the row is a 6-column grid
+          whose cells must map 1:1 onto its six children: skipping the cell made
+          every later child shift one column left, which pushed the subject into
+          the 30px id column (rendered as "需…") and the status into the flexible
+          subject column (2026-09-10, visible on mobile). */}
+      <span className={css.taskLane} aria-hidden>
+        {task.depth > 0 && Array.from({ length: Math.min(task.depth, 4) }, (_, i) => (
+          <span key={i} className={css.taskLaneSegment} data-depth={i} />
+        ))}
+      </span>
       <span className={css.taskIcon}>{StateIcon !== undefined && <StateIcon size={14} className={task.state === 'running' ? css.animPulse : undefined} decorative />}</span>
       <span className={css.taskId}>{task.id}</span>
       <span className={css.taskSubject} title={task.description || task.subject}>

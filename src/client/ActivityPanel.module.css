@@ -952,15 +952,16 @@
     display: none;
   }
 
-  .memberProgress {
-    justify-self: start;
-    white-space: nowrap;
-  }
-
-  .memberState {
-    justify-self: end;
-    white-space: nowrap;
-  }
+  /* Explicit placement. Auto-placement put progress in row 1 col 3 but state in
+     row 2 col 1, and `justify-self: end` then drew the ~40px state chip right
+     aligned inside the 22px icon column — i.e. 14px to the LEFT of the card's
+     content box, hanging over its padding. Pinning each cell keeps the row
+     stable whichever children render (2026-09-10). */
+  .memberIcon { grid-area: 1 / 1; }
+  .memberName { grid-area: 1 / 2; }
+  .memberProgress { grid-area: 1 / 3; justify-self: end; white-space: nowrap; }
+  .memberUnread { grid-area: 2 / 1; justify-self: start; }
+  .memberState { grid-area: 2 / 2; justify-self: start; white-space: nowrap; }
 
   .taskRow {
     grid-template-columns: auto 18px 30px minmax(0, 1fr) auto;
