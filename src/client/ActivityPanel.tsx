@@ -138,9 +138,9 @@ function useTeamData(expanded: boolean, viewMode: 'live' | 'archive'): {
  * as a full-width bottom sheet instead of a badge-anchored dropdown.
  */
 function useIsNarrow(): boolean {
-  const [isNarrow, setIsNarrow] = useState(() => window.matchMedia('(max-width: 720px)').matches)
+  const [isNarrow, setIsNarrow] = useState(() => window.matchMedia('(max-width: 768px)').matches)
   useEffect(() => {
-    const mq = window.matchMedia('(max-width: 720px)')
+    const mq = window.matchMedia('(max-width: 768px)')
     const onChange = (e: MediaQueryListEvent): void => { setIsNarrow(e.matches) }
     mq.addEventListener('change', onChange)
     return () => { mq.removeEventListener('change', onChange) }

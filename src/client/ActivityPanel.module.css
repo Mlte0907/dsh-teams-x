@@ -120,34 +120,10 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Mobile row simplification: fewer columns, stack the secondary info. */
-@media (max-width: 720px) {
-  .memberRow {
-    grid-template-columns: 22px minmax(0, 1fr) auto;
-    grid-template-rows: auto auto;
-    row-gap: 2px;
-  }
-
-  .memberMeta {
-    display: none;
-  }
-
-  .memberProgress {
-    justify-self: start;
-  }
-
-  .memberState {
-    justify-self: end;
-  }
-
-  .taskRow {
-    grid-template-columns: auto 18px 30px minmax(0, 1fr) auto;
-  }
-
-  .taskAssignee {
-    display: none;
-  }
-}
+/* Mobile overrides live at the END of this file, AFTER the base rules:
+   equal specificity makes source order the tiebreak, so an override block
+   placed before the base rules silently loses (the .refreshButton 24px base
+   beat the 34px mobile override, 2026-09-10). */
 
 .panelHeader {
   display: flex;
@@ -956,4 +932,71 @@
   display: flex;
   align-items: center;
   gap: 6px;
+}
+
+/* ============================================================
+   Mobile overrides — MUST stay at the end of the file.
+   Base rules above share the same specificity, so source order is the
+   tiebreak: a block placed earlier silently loses (2026-09-10 bug).
+   Breakpoint matches dsh-remote-x's mobile layer (768px) so the sheet
+   mode and the surrounding mobile chrome switch together.
+   ============================================================ */
+@media (max-width: 768px) {
+  .memberRow {
+    grid-template-columns: 22px minmax(0, 1fr) auto;
+    grid-template-rows: auto auto;
+    row-gap: 2px;
+  }
+
+  .memberMeta {
+    display: none;
+  }
+
+  .memberProgress {
+    justify-self: start;
+    white-space: nowrap;
+  }
+
+  .memberState {
+    justify-self: end;
+    white-space: nowrap;
+  }
+
+  .taskRow {
+    grid-template-columns: auto 18px 30px minmax(0, 1fr) auto;
+  }
+
+  .taskAssignee {
+    display: none;
+  }
+
+  /* Bottom sheet clears the iOS home indicator. */
+  .panelSheet {
+    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
+  }
+
+  /* Touch targets: the desktop controls are 18-24px, too small on a phone. */
+  .refreshButton {
+    width: 34px;
+    height: 34px;
+    font-size: 14px;
+  }
+
+  .modeOption {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+
+  .stopButton,
+  .stopCancel,
+  .stopConfirm {
+    padding: 7px 14px;
+    font-size: 13px;
+  }
+
+  .memberPause {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
 }
