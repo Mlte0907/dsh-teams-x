@@ -6,30 +6,63 @@
 
 **TeamsX for DeepSeek Harness** — turn one session into a coordinated multi-agent team: a captain spawns durable member subagents, breaks a goal into a dependency-aware task DAG, and coordinates through direct mailbox messages, with a live all-SVG activity panel.
 
-> 本插件原生面向 **DeepSeek Harness 0.1.3-alpha.1**（源码 checkout），并把所有宿主 API 触点收敛到 `src/compat.ts` 能力探测层——宿主升级时只需改这一个文件。工具命名空间为 `teamsx_*`、状态目录为 `.teams-x`，与宿主内其他团队模式互不干扰。
+> 本插件原生面向 **DeepSeek Harness 0.1.5-rc.2**，宿主 API 漂移点全部收敛在 `src/compat.ts` 能力探测层——宿主升级时通常只需改这一个文件。工具命名空间为 `teamsx_*`、状态目录为 `.teams-x`，与宿主内其他团队模式互不干扰。
 
-## 安装（本地路径）
+## 安装
+
+### 方式 A：仓库 tgz 一条命令（推荐，最快）
+
+仓库根目录自带与源码同步构建的 `dsh-teams-x-<version>.tgz`（零运行时依赖，宿主包全部走 peerDependencies）：
 
 ```sh
-dsh plugin --profile web add <path-to-dsh-teams-x>
+dsh plugin --profile web add <仓库路径>/dsh-teams-x-0.2.1.tgz
 ```
 
-## 安装（npm）
+装完 **重启宿主**（`dsh plugin add` 不会热加载新 bundle），然后按下文「安装验证」确认。
+
+### 方式 B：npm
 
 ```sh
-npm i dsh-teams-x    # 已发布到 npm(或按上文从源码构建)
+npm i dsh-teams-x && dsh plugin --profile web add <node_modules 路径>/dsh-teams-x
 ```
 
-profile 支持 `patchReload: live`，改完源码执行 `pnpm build` 后重启宿主即可生效。真实实例验证（工具注册、成员生成、调度、面板轮询）由使用者执行。
+### 方式 C：从源码构建
 
-## 从源码构建
+前置要求：Node ≥ 24、pnpm ≥ 12，且**同一台机器上有一份 deepseek-harness 源码 checkout**（构建期 `link:` 依赖直连它，运行期不需要）。
 
 ```sh
-pnpm install   # devDependencies 以 link: 直连 deepseek-harness checkout
+# 1) 布局二选一：
+#    嵌套式：把本仓库 clone 到 <任意目录>/dsh-teams-x，再在其中放 harness：
+git clone https://github.com/Mlte0907/dsh-teams-x.git && cd dsh-teams-x
+ln -s <harness-checkout 绝对路径> deepseek-harness   # 兄弟目录时用内嵌 symlink 对齐 link:./deepseek-harness
+
+# 2) 安装 + 类型检查 + 构建
+pnpm install
 pnpm typecheck
-pnpm build
-pnpm verify:icons   # 校验 assets/icons 与 icon-data.ts 同步
+pnpm build          # 产物在 lib/
+
+# 3) 安装进 profile（用仓库目录或 pnpm pack 产物均可）
+dsh plugin --profile web add "$(pwd)"
 ```
+
+> 常见报错：typecheck 报 `Cannot find module '@deepseek-ai/dsh-client-ui-sidebar-right'`——它是 peerDependency，宿主侧由 profiles 级 node_modules 供给。临时把它链入本仓库 `node_modules/@deepseek-ai/` 即可（指到 `<harness 机器> ~/.dsh/profiles/node_modules/@deepseek-ai/dsh-client-ui-sidebar-right`）。
+
+### 安装验证（三步）
+
+1. 重启宿主后查日志，确认 loader 成功应用本插件、无 `failed to apply loader entry teams-x`：
+
+   ```sh
+   journalctl -u dsh-web --since '5 minutes ago' | grep -iE 'teams-x|failed'
+   ```
+
+2. 打开 Web UI，侧边栏应出现 **TeamsX 活动面板**（全 SVG 渲染）。
+3. 新会话中让 agent 调 `teamsx_create` 建一个测试团队（如 `{"name":"smoke-test","members":[{"name":"a1"}]}`），确认工具返回团队快照。
+
+> `pnpm build` 后重启宿主即可生效（profile 为 `patchReload: live`）。真实实例验证（工具注册、成员生成、调度、面板轮询）由使用者执行。
+
+## v0.2.1 变更
+
+- **兼容 DeepSeek Harness 0.1.5-rc.2**：宿主移除了插件侧 `ctx.subagents.registerContinuableSetup` 钩子，成员模型选择桥改为监听 `agent/session-start` 事件（fresh `startup` 与冷恢复 `resume` 双路径），修复 `failed to apply loader entry teams-x` 启动崩溃。
 
 ## v0.2 新特性
 
