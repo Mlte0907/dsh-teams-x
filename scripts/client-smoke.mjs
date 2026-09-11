@@ -237,8 +237,10 @@ if (!registered.slots.includes('sidebar.footer.action')) {
 }
 console.log('hint host slot registered: sidebar.footer.action (PASS)')
 
-// ── 0.1.5-only hosts: tab type + its two seats, panel row + main panel ──
-for (const slot of ['sidebar.panellist', 'main', 'sidebar.right.pane.tab', 'sidebar.right.pane.tab.title']) {
+// ── 0.1.5-only hosts: right Sidebar tab + its two seats ──
+// (2026-09-12) panel-icon row / main panel removed by product decision — only
+// the right Sidebar tab seats are asserted.
+for (const slot of ['sidebar.right.pane.tab', 'sidebar.right.pane.tab.title']) {
   if (!registered.slots.includes(`register:${slot}`)) {
     throw new Error(`panel hosts: ${slot} not registered, got ${registered.slots.join(', ')}`)
   }
@@ -246,25 +248,17 @@ for (const slot of ['sidebar.panellist', 'main', 'sidebar.right.pane.tab', 'side
 if (!registered.tabs.includes('teams-x')) {
   throw new Error(`panel hosts: right Sidebar tab type not registered, got ${registered.tabs.join(', ')}`)
 }
-console.log('panel hosts registered: sidebar.panellist + main + right Sidebar tab (PASS)')
+console.log('panel hosts registered: right Sidebar tab (PASS)')
 
-// ── both hosts render without a crash (SSR) ──
-const { TeamsXTabBody, TeamsXMainPanel } = await import('../lib/client/panel-hosts.js')
+// ── the right Sidebar tab body renders without a crash (SSR) ──
+const { TeamsXTabBody } = await import('../lib/client/panel-hosts.js')
 const tabHtml = renderToString(React.createElement(TeamsXTabBody, {
   sessionId: 'session-smoke',
   t,
   openMember: () => {},
 }))
 if (tabHtml.trim() === '') throw new Error('tab body SSR rendered nothing')
-const mainHtml = renderToString(React.createElement(TeamsXMainPanel, {
-  t,
-  openMember: () => {},
-  useSessions: (select) => select({ current: undefined }),
-}))
-if (!mainHtml.includes('panel.pickSession')) {
-  throw new Error(`main panel without a session must render the pick-session hint, got ${mainHtml.length} chars`)
-}
-console.log('tab body + main panel SSR render (PASS)')
+console.log('tab body SSR render (PASS)')
 
 // ── hint host SSR safety (visible=false → renders nothing) ──
 const { TeamsXHintHost } = await import('../lib/client/hint-host.js')

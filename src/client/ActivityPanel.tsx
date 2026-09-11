@@ -21,6 +21,9 @@ import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots
 import css from './ActivityPanel.module.css'
 import {
   ACTIVITY_ICONS,
+  GlyphClose,
+  GlyphPause,
+  GlyphRefresh,
   ROLE_ICONS,
   VISUAL_STATE_ICONS,
   TeamsXLogo,
@@ -151,15 +154,21 @@ function useIsNarrow(): boolean {
 /**
  * Place the expanded panel under the badge, cleared below the session tab
  * bar. Placement runs ONCE on open (plus on resize): no periodic re-probing,
- * so the panel never visibly jumps after settling. The one-shot horizontal
- * probe still dodges a higher-layer dock that would cover it.
+ * so the panel never visibly jumps after settling.
+ *
+ * (2026-09-12) Horizontal anchor switched from the badge's right edge to its
+ * LEFT edge: the badge sits mid-header, so right-edge anchoring pushed the
+ * 400px card into the content area's top-left corner — visually detached from
+ * the badge and covering the transcript. Opening to the right of the badge
+ * keeps the card visually attached to its trigger; a clamp keeps it inside
+ * the viewport on narrow desktops.
  */
 function usePanelPlacement(
   badgeRef: RefObject<HTMLElement | null>,
   panelRef: RefObject<HTMLDivElement | null>,
   expanded: boolean,
-): { top: number; right: number } {
-  const [pos, setPos] = useState({ top: 96, right: 18 })
+): { top: number; left: number } {
+  const [pos, setPos] = useState({ top: 96, left: 96 })
   useEffect(() => {
     if (!expanded) return
     const place = (): void => {
@@ -175,29 +184,12 @@ function usePanelPlacement(
       if (top + maxH > window.innerHeight - 8) {
         top = Math.max(8, window.innerHeight - maxH - 8)
       }
-      const preferred = Math.max(8, window.innerWidth - rect.right)
       const panel = panelRef.current
-      let right = preferred
-      if (panel !== null) {
-        // One-shot cover probe: shift left only if something would paint over
-        // the panel's header at the preferred spot.
-        const candidates = [preferred, preferred + 80, preferred + 180, preferred + 320, preferred + 480]
-        for (const candidate of candidates) {
-          panel.style.right = `${candidate}px`
-          const r = panel.getBoundingClientRect()
-          if (r.width === 0) break
-          // Bounds check: never push the panel past the left edge of the viewport.
-          if (r.left < 8) break
-          const probeY = Math.min(r.top + 20, window.innerHeight - 1)
-          const topEl = document.elementFromPoint(r.left + Math.min(60, r.width / 2), probeY)
-          if (topEl === null || panel === topEl || panel.contains(topEl)) {
-            right = candidate
-            break
-          }
-          right = candidate
-        }
-      }
-      setPos((prev) => (prev.top === top && prev.right === right ? prev : { top, right }))
+      const width = panel?.getBoundingClientRect().width ?? 0
+      let left = rect.left
+      if (width > 0 && left + width > window.innerWidth - 8) left = window.innerWidth - width - 8
+      left = Math.max(8, left)
+      setPos((prev) => (prev.top === top && prev.left === left ? prev : { top, left }))
     }
     place()
     window.addEventListener('resize', place)
@@ -324,7 +316,7 @@ function MemberRow({ member, team, t, openMember, readOnly }: {
             aria-label={t('member.pause')}
             title={t('member.pause')}
           >
-            {pausing ? '…' : '⏸'}
+            {pausing ? '…' : <GlyphPause size={11} decorative />}
           </button>
         )}
       </span>
@@ -610,7 +602,11 @@ export function TeamsXPanelBody({ sessionId, t, openMember, onClose }: TeamsXPan
             aria-label={translate('panel.refresh')}
             title={translate('panel.refresh')}
           >
-            <span className={loading === true ? css.animSpin : undefined}>⟳</span>
+            <GlyphRefresh
+              size={13}
+              className={loading === true ? css.animSpin : undefined}
+              decorative
+            />
           </button>
           {onClose !== undefined && (
             <button
@@ -620,7 +616,7 @@ export function TeamsXPanelBody({ sessionId, t, openMember, onClose }: TeamsXPan
               aria-label={translate('panel.close')}
               title={translate('panel.close')}
             >
-              ✕
+              <GlyphClose size={13} decorative />
             </button>
           )}
         </div>
@@ -758,7 +754,7 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
           ref={panelRef}
           style={isNarrow ? undefined : {
             top: `${placement.top}px`,
-            right: `${placement.right}px`,
+            left: `${placement.left}px`,
           }}
           role='region'
           aria-label={translate('panel.aria')}

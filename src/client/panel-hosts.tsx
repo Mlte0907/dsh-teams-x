@@ -1,16 +1,20 @@
 /**
  * The 0.1.5-only hosts for the shared TeamsX activity body.
  *
- * Two more ways into the same content the session-header badge opens as a
- * dropdown: a right Sidebar tab (which is the full-width drawer on a phone, so
- * this is the mobile-reachable one) and a main-column panel reached from the
- * sidebar's panel-icon row.
+ * The right Sidebar tab is the extra way into the same content the
+ * session-header badge opens as a dropdown — and on a phone the right Sidebar
+ * is the full-width drawer, so this is the mobile-reachable one.
  *
- * OPTIONAL BY CONTRACT. `ctx.sidebarRightTabs`, the keyed `main` dispatch and
- * the `sidebar.panellist` row ship on the 0.1.5-rc.1 line only, so every
- * registration here rides a DEFERRED inject and is guarded: the plugin's hard
- * injects stay `slots` + `locale`, and on a host without these seats nothing is
- * registered, the callback never fires, and the shipped badge keeps working.
+ * (2026-09-12) The sidebar panel-icon row entry and its main-column panel are
+ * GONE by product decision: the desktop left sidebar must not offer a TeamsX
+ * button (its panel duplicated the badge dropdown and the right-Sidebar tab).
+ * Only the right-Sidebar tab registration remains here.
+ *
+ * OPTIONAL BY CONTRACT. `ctx.sidebarRightTabs` and the keyed `main` dispatch
+ * ship on the 0.1.5-rc.1 line only, so every registration here rides a
+ * DEFERRED inject and is guarded: the plugin's hard injects stay `slots` +
+ * `locale`, and on a host without these seats nothing is registered, the
+ * callback never fires, and the shipped badge keeps working.
  * A foreign registry (a throwing `register`, a taken id) costs the extra host,
  * never the browser.
  * @module dsh-teams-x/client/panel-hosts
@@ -34,16 +38,14 @@ import type { TeamActivitySnapshot } from '../snapshot-types.ts'
 export type OpenMember = (parentId: TeamActivitySnapshot['captainSessionId'], childId: string) => void
 
 /**
- * Tab type id, its body/title seat key, and the `main` panel key. One value,
- * because the sidebar's panel-icon row addresses the main panel by this id.
+ * Tab type id, its body/title seat key, and the tab's `kind`. One value, so
+ * the registry, the seats and the open-tab dispatch all address this tab.
  */
 const HOST_ID = 'teams-x'
 /** Tab kind `openTab` names; namespaced because another plugin may own `teams`. */
 const HOST_KIND = 'teams-x'
 /** Guide capsule order: after the shipped entries (Files is 10). */
 const GUIDE_ORDER = 30
-/** Panel-icon row order among the sidebar's entries. */
-const PANEL_ORDER = 40
 
 /** Props the right Sidebar's tab seat delivers: the session and the locale `t`. */
 type TabBodyProps =
@@ -76,33 +78,6 @@ function makeTabTitle(t: PanelTranslate): () => ReactElement {
       </>
     )
   }
-}
-
-/** Props the main-column panel receives: the root seat's kit plus our inject. */
-type MainPanelProps =
-  & PropsRuntime<'main'>
-  & PropsLocale<'teamsX'>
-  & { readonly openMember: OpenMember }
-
-/**
- * The main-column panel: the same body, driven by the session the panel row was
- * switched away from the conversation for. The `main` seat is root-scoped, so
- * the session comes from the sessions store rather than from the props.
- */
-export function TeamsXMainPanel({ useSessions, t, openMember }: MainPanelProps): ReactElement {
-  const current = useSessions((state) => state.current)
-  return (
-    <div className={css.panel}>
-      {current === undefined
-        ? <p className={css.panelEmpty}>{t('panel.pickSession')}</p>
-        : <TeamsXPanelBody sessionId={current} t={t} openMember={openMember} />}
-    </div>
-  )
-}
-
-/** The sidebar's panel-icon row entry: the TeamsX glyph, themed by the sidebar. */
-function TeamsXPanelIcon({ size }: { readonly size?: number }): ReactElement {
-  return <TeamsXLogo size={size ?? 18} decorative />
 }
 
 /**
@@ -156,32 +131,6 @@ function registerSidebarTab(ctx: ClientContext, openMember: OpenMember, t: Panel
 }
 
 /**
- * Register the sidebar's panel-icon entry and the main-column panel it selects.
- * Feature-detected as a pair: a host with neither seat keeps the badge only.
- * @param ctx - client root context carrying `slots`.
- * @param openMember - member-transcript navigation.
- * @param t - the plugin-namespace translate; the label thunk reads it at render.
- */
-function registerMainPanel(ctx: ClientContext, openMember: OpenMember, t: PanelTranslate): void {
-  try {
-    ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({
-      name: 'sidebar.panellist',
-      id: HOST_ID,
-      order: PANEL_ORDER,
-      label: () => t('tab'),
-    }, TeamsXPanelIcon))
-    ctx.slots.inject('main', () => ctx.slots.register({
-      name: 'main',
-      key: HOST_ID,
-      locale: TEAMSX_LOCALE_NAMESPACE,
-      inject: () => ({ openMember }),
-    }, TeamsXMainPanel))
-  } catch (error: unknown) {
-    console.warn('teams-x: sidebar panel list unavailable on this host', error)
-  }
-}
-
-/**
  * Contribute every 0.1.5-only host. Called from `apply` after the badge is
  * mounted, so a host that serves none of these seats still has the panel.
  *
@@ -194,10 +143,9 @@ function registerMainPanel(ctx: ClientContext, openMember: OpenMember, t: PanelT
 export function registerPanelHosts(ctx: ClientContext, openMember: OpenMember): void {
   const locale = ctx.locale as { bind?: (namespace: string) => PanelTranslate }
   if (typeof locale.bind !== 'function') {
-    console.warn('teams-x: locale.bind unavailable; the sidebar tab and main panel are disabled')
+    console.warn('teams-x: locale.bind unavailable; the right Sidebar tab is disabled')
     return
   }
   const t = locale.bind(TEAMSX_LOCALE_NAMESPACE)
   registerSidebarTab(ctx, openMember, t)
-  registerMainPanel(ctx, openMember, t)
 }

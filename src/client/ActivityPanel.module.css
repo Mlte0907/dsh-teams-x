@@ -221,7 +221,10 @@
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  padding: 24px 12px;
+  padding: 28px 16px;
+  border: 1px dashed var(--dsw-alias-border-l2, #3c3c3d);
+  border-radius: 10px;
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.04));
 }
 
 .emptyLogo {
@@ -708,6 +711,13 @@
   font-size: 11px;
   white-space: nowrap;
 }
+
+/* Status text rides the same state hues as its icon, so a row is scannable
+   by color alone without reading the words. */
+.taskRow[data-state='completed'] .taskStatus { color: var(--dsw-alias-state-success-primary, #22c55e); }
+.taskRow[data-state='failed'] .taskStatus { color: var(--dsw-alias-state-error-primary, #f25a5a); }
+.taskRow[data-state='running'] .taskStatus { color: var(--dsw-alias-state-business-primary, #679efe); }
+.taskRow[data-state='blocked'] .taskStatus { color: var(--dsw-alias-state-warn-primary, #f59e0b); }
 
 .inbox {
   border-top: 1px dashed var(--dsw-alias-border-l2, #3c3c3d);

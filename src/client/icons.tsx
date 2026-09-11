@@ -55,6 +55,31 @@ function makeIcon(name: keyof typeof ICONS): IconComponent {
   return Component
 }
 
+/** Build a panel-control glyph (refresh/close/pause). These are interface
+ * chrome rather than domain icons, so they carry inline bodies here instead
+ * of riding the assets/icons pipeline that `pnpm verify:icons` guards. */
+function makeGlyphIcon(body: string, label: string): IconComponent {
+  function Component(props: IconProps): ReactElement {
+    return <IconSvg body={body} label={props.label ?? label} {...props} />
+  }
+  return Component
+}
+
+/** Rotate-clockwise arrow, for the panel refresh control. */
+export const GlyphRefresh = makeGlyphIcon(
+  `<polyline points='23 4 23 10 17 10'/><path d='M20.49 15a9 9 0 1 1-2.12-9.36L23 10'/>`,
+  'refresh',
+)
+
+/** Two-stroke X, for the panel close control. */
+export const GlyphClose = makeGlyphIcon(`<path d='M18 6 6 18M6 6l12 12'/>`, 'close')
+
+/** Two stroke bars, for the per-member pause control. */
+export const GlyphPause = makeGlyphIcon(
+  `<rect x='6.5' y='4.5' width='4' height='15' rx='1'/><rect x='13.5' y='4.5' width='4' height='15' rx='1'/>`,
+  'pause',
+)
+
 /** Build one named status icon component. */
 function makeStatusIcon(name: keyof typeof STATUS_ICONS): IconComponent {
   const definition = STATUS_ICONS[name]!
