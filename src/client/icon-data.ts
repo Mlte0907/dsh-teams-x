@@ -14,9 +14,13 @@ export interface IconDefinition {
   readonly label: string
   /** Inner SVG markup (stroke style; the shell supplies svg/attrs). */
   readonly body: string
+  /** Non-default viewBox (the shared shell assumes 0 0 24 24). */
+  readonly viewBox?: string
+  /** Fill-based icons render `fill: currentColor` with no stroke shell. */
+  readonly mode?: 'fill'
 }
 
-/** Shared stroke attributes applied by the shell to every icon. */
+/** Shared stroke attributes applied by the shell to every stroke icon. */
 export const ICON_STROKE = {
   width: 1.8,
   linecap: 'round',
@@ -27,15 +31,10 @@ export const ICONS: Readonly<Record<string, IconDefinition>> = {
   // ── brand ──
   'teams-x-logo': {
     label: 'TeamsX',
-    body: [
-      // Three coordinated nodes around a captain node — a team graph.
-      '<circle cx="12" cy="6" r="2.6"/>',
-      '<circle cx="5.5" cy="17" r="2.6"/>',
-      '<circle cx="18.5" cy="17" r="2.6"/>',
-      '<path d="M10.6 8.2 7 14.8"/>',
-      '<path d="M13.4 8.2 17 14.8"/>',
-      '<path d="M8.1 17h7.8"/>',
-    ].join(''),
+    // Robot head — the captain's mark (user-supplied artwork, fill-based).
+    mode: 'fill',
+    viewBox: '0 0 1024 1024',
+    body: '<path d="M329.142857 347.428571a18.285714 18.285714 0 0 1 2.139429 36.443429L329.142857 384h-36.571428a91.428571 91.428571 0 0 0-91.337143 87.460571L201.142857 475.428571v182.857143a91.428571 91.428571 0 0 0 87.460572 91.337143L292.571429 749.714286h438.857142a91.428571 91.428571 0 0 0 91.337143-87.460572L822.857143 658.285714V475.428571a91.428571 91.428571 0 0 0-87.460572-91.337142L731.428571 384h-36.571428a18.285714 18.285714 0 0 1-2.139429-36.443429L694.857143 347.428571h36.571428a128 128 0 0 1 127.926858 123.611429L859.428571 475.428571v182.857143a128 128 0 0 1-123.611428 127.926857L731.428571 786.285714H292.571429a128 128 0 0 1-127.926858-123.611428L164.571429 658.285714V475.428571a128 128 0 0 1 123.611428-127.926857L292.571429 347.428571h36.571428z m54.857143 146.285715a36.571429 36.571429 0 1 1 0 73.142857 36.571429 36.571429 0 0 1 0-73.142857z m256 0a36.571429 36.571429 0 1 1 0 73.142857 36.571429 36.571429 0 0 1 0-73.142857z m44.745143-254.061715a18.285714 18.285714 0 0 1 8.173714 24.521143C664.941714 320.128 581.924571 384 512 384s-152.941714-63.853714-180.918857-119.826286a18.285714 18.285714 0 0 1 32.694857-16.347428C386.084571 292.443429 457.581714 347.428571 512 347.428571s125.915429-55.003429 148.224-99.602285a18.285714 18.285714 0 0 1 24.521143-8.173715z"/>',
   },
 
   // ── member roles ──

@@ -10,7 +10,7 @@
  */
 
 import type { ReactElement } from 'react'
-import { ICONS, ICON_STROKE, STATUS_ICONS } from './icon-data.ts'
+import { ICONS, ICON_STROKE, STATUS_ICONS, type IconDefinition } from './icon-data.ts'
 
 export interface IconProps {
   /** Rendered size in px (default 16). */
@@ -23,23 +23,24 @@ export interface IconProps {
   readonly decorative?: boolean
 }
 
-function IconSvg({ body, label, size = 16, className, decorative }: IconProps & { body: string }): ReactElement {
+function IconSvg({ definition, label, size = 16, className, decorative }: IconProps & { definition: IconDefinition }): ReactElement {
+  const fill = definition.mode === 'fill'
   return (
     <svg
-      viewBox='0 0 24 24'
+      viewBox={definition.viewBox ?? '0 0 24 24'}
       width={size}
       height={size}
-      fill='none'
-      stroke='currentColor'
-      strokeWidth={ICON_STROKE.width}
-      strokeLinecap={ICON_STROKE.linecap}
-      strokeLinejoin={ICON_STROKE.linejoin}
+      fill={fill ? 'currentColor' : 'none'}
+      stroke={fill ? 'none' : 'currentColor'}
+      strokeWidth={fill ? undefined : ICON_STROKE.width}
+      strokeLinecap={fill ? undefined : ICON_STROKE.linecap}
+      strokeLinejoin={fill ? undefined : ICON_STROKE.linejoin}
       className={className}
       role={decorative === true ? undefined : 'img'}
       aria-hidden={decorative === true || undefined}
       aria-label={decorative === true ? undefined : label}
     >
-      <g dangerouslySetInnerHTML={{ __html: body }} />
+      <g dangerouslySetInnerHTML={{ __html: definition.body }} />
     </svg>
   )
 }
@@ -50,7 +51,7 @@ export type IconComponent = (props: IconProps) => ReactElement
 function makeIcon(name: keyof typeof ICONS): IconComponent {
   const definition = ICONS[name]!
   function Component(props: IconProps): ReactElement {
-    return <IconSvg body={definition.body} label={props.label ?? definition.label} {...props} />
+    return <IconSvg definition={definition} label={props.label ?? definition.label} {...props} />
   }
   return Component
 }
@@ -59,8 +60,9 @@ function makeIcon(name: keyof typeof ICONS): IconComponent {
  * chrome rather than domain icons, so they carry inline bodies here instead
  * of riding the assets/icons pipeline that `pnpm verify:icons` guards. */
 function makeGlyphIcon(body: string, label: string): IconComponent {
+  const definition: IconDefinition = { label, body }
   function Component(props: IconProps): ReactElement {
-    return <IconSvg body={body} label={props.label ?? label} {...props} />
+    return <IconSvg definition={definition} label={props.label ?? label} {...props} />
   }
   return Component
 }
@@ -86,11 +88,29 @@ export const GlyphPause = makeGlyphIcon(
   'pause',
 )
 
+/** Clock face, for the instrument row's elapsed reading. */
+export const GlyphClock = makeGlyphIcon(
+  `<circle cx='12' cy='12' r='8.5'/><path d='M12 7.5V12l3 2'/>`,
+  'elapsed',
+)
+
+/** Encircled i, for the member-channel info popover trigger. */
+export const GlyphInfo = makeGlyphIcon(
+  `<circle cx='12' cy='12' r='8.5'/><path d='M12 11v5'/><path d='M12 7.6v.2'/>`,
+  'details',
+)
+
+/** Mailbox tray, for the inbox line header. */
+export const GlyphInbox = makeGlyphIcon(
+  `<path d='M4.5 4.5h15v15h-15z'/><path d='M4.5 13.5h4.4a3.1 3.1 0 0 0 6.2 0h4.4'/>`,
+  'inbox',
+)
+
 /** Build one named status icon component. */
 function makeStatusIcon(name: keyof typeof STATUS_ICONS): IconComponent {
   const definition = STATUS_ICONS[name]!
   function Component(props: IconProps): ReactElement {
-    return <IconSvg body={definition.body} label={props.label ?? definition.label} {...props} />
+    return <IconSvg definition={definition} label={props.label ?? definition.label} {...props} />
   }
   return Component
 }

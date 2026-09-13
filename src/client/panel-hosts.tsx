@@ -20,11 +20,12 @@
  * @module dsh-teams-x/client/panel-hosts
  */
 
+import { useEffect, useState } from 'react'
 import type { ReactElement } from 'react'
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-// Type-only: declare the right Sidebar's tab registry, its two seats and the
-// keyed `main` dispatch on hosts that ship them (0.1.5-rc.1+).
+// Type-only: declare the right Sidebar's tab registry and its two seats on
+// hosts that ship them (0.1.5-rc.1+).
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import css from './ActivityPanel.module.css'
@@ -33,9 +34,31 @@ import { TeamsXPanelBody } from './ActivityPanel.tsx'
 import { TEAMSX_LOCALE_NAMESPACE } from './locales.ts'
 import type { PanelTranslate } from './ActivityPanel.tsx'
 import type { TeamActivitySnapshot } from '../snapshot-types.ts'
+import { isSheetOpen, onSheetOpen } from './sheet-visibility.ts'
 
 /** Open one member's transcript (wired by the plugin shell). */
 export type OpenMember = (parentId: TeamActivitySnapshot['captainSessionId'], childId: string) => void
+
+/**
+ * On a phone the badge's bottom sheet can stack right on top of this pane —
+ * the same team card twice on a 390px screen reads as broken. While the sheet
+ * is open on a narrow viewport, this pane steps aside.
+ */
+function useSheetOccluded(): boolean {
+  const [occluded, setOccluded] = useState(() => isSheetOpen() && window.matchMedia('(max-width: 768px)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 768px)')
+    const sync = (): void => { setOccluded(isSheetOpen() && mq.matches) }
+    sync()
+    const unsubscribe = onSheetOpen(sync)
+    mq.addEventListener('change', sync)
+    return () => {
+      unsubscribe()
+      mq.removeEventListener('change', sync)
+    }
+  }, [])
+  return occluded
+}
 
 /**
  * Tab type id, its body/title seat key, and the tab's `kind`. One value, so
@@ -53,13 +76,19 @@ type TabBodyProps =
   & PropsLocale<'teamsX'>
   & { readonly openMember: OpenMember }
 
-/** The right Sidebar tab: the shared body in the panel's own scrolling column. */
-export function TeamsXTabBody({ sessionId, t, openMember }: TabBodyProps): ReactElement {
+function TabBody({ sessionId, t, openMember }: TabBodyProps): ReactElement {
   return (
-    <div className={css.panel}>
+    <div className={`${css.panel} ${css.panelTab}`}>
       <TeamsXPanelBody sessionId={sessionId} t={t} openMember={openMember} />
     </div>
   )
+}
+
+/** The right Sidebar tab: the shared body in the panel's own scrolling column. */
+export function TeamsXTabBody(props: TabBodyProps): ReactElement {
+  const occluded = useSheetOccluded()
+  if (occluded) return <></>
+  return <TabBody {...props} />
 }
 
 /**

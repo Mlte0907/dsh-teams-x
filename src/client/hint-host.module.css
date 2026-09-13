@@ -19,7 +19,7 @@
   font-size: 13px;
   line-height: 1.5;
   color: var(--dsw-alias-label-primary, #f9fafb);
-  background: var(--dsw-alias-elevated-surface, #1e293b);
+  background: var(--dsw-alias-bg-base, #1e293b);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   animation: teamsx-hint-fade-in 0.2s ease-out;
 }
@@ -47,7 +47,7 @@
 
 .close:hover {
   color: var(--dsw-alias-label-primary, #f9fafb);
-  background: var(--dsw-alias-press-surface, rgba(255, 255, 255, 0.08));
+  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
 }
 
 @keyframes teamsx-hint-fade-in {

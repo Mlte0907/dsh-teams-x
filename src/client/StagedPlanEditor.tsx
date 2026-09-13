@@ -12,7 +12,7 @@ import { useState } from 'react'
 import type { ReactElement } from 'react'
 import type { StagedPlanMutation, TeamActivitySnapshot } from '../snapshot-types.ts'
 import type { TeamsXLocaleKey } from './locale-keys.ts'
-import { TEAMSX_PLAN_URL } from './ActivityPanel.tsx'
+import { TEAMSX_PLAN_URL } from './endpoints.ts'
 import css from './ActivityPanel.module.css'
 
 /** The editor's translate function (same shape the panel uses). */

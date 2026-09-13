@@ -25,15 +25,19 @@ try {
 
 await mkdir(outDir, { recursive: true })
 
-for (const [name, icon] of Object.entries(ICONS)) {
-  const svg = [
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"',
-    ' fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"',
+function shell(icon) {
+  const fill = icon.mode === 'fill'
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${icon.viewBox ?? '0 0 24 24'}" width="24" height="24"`,
+    fill ? ' fill="currentColor"' : ' fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"',
     ` role="img" aria-label="${icon.label}">`,
     icon.body,
     '</svg>',
   ].join('')
-  await writeFile(join(outDir, `${name}.svg`), `${svg}\n`, 'utf8')
+}
+
+for (const [name, icon] of Object.entries(ICONS)) {
+  await writeFile(join(outDir, `${name}.svg`), `${shell(icon)}\n`, 'utf8')
 }
 console.log(`[dsh-teams-x] exported ${Object.keys(ICONS).length} icons to assets/icons/`)
 
@@ -43,13 +47,7 @@ if (process.argv.includes('--check')) {
   let drift = 0
   for (const [name, icon] of Object.entries(ICONS)) {
     const file = `${name}.svg`
-    const svg = [
-      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24"',
-      ' fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"',
-      ` role="img" aria-label="${icon.label}">`,
-      icon.body,
-      '</svg>',
-    ].join('')
+    const svg = shell(icon)
     const expected = `${svg}\n`
     if (!committed.has(file)) {
       console.error(`[dsh-teams-x] missing asset: ${file}`)
