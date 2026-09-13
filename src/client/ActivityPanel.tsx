@@ -563,10 +563,12 @@ function TeamCard({ team, t, openMember, readOnly, onSaved }: {
         </div>
       )}
 
+      <h5 className={css.sectionLabel}>{t('section.members' as TeamsXLocaleKey)}</h5>
       <div className={css.roster}>
         {team.members.map((member) => <MemberRow key={member.id !== '' ? member.id : member.name} member={member} team={team} t={t} openMember={openMember} />)}
       </div>
 
+      <h5 className={css.sectionLabel}>{t('section.tasks' as TeamsXLocaleKey)}</h5>
       <div className={css.dag}>
         {team.tasks.length === 0 && team.phase === 'running' && (
           <div className={css.dagEmpty} role='status'>
@@ -579,7 +581,7 @@ function TeamCard({ team, t, openMember, readOnly, onSaved }: {
         {team.tasks.map((task) => <TaskRow key={task.id} task={task} t={t} />)}
         {team.operations.length > 0 && (
           <details className={css.timeline}>
-            <summary className={css.timelineSummary}>时间线（最近 {team.operations.length} 条）</summary>
+            <summary className={css.timelineSummary}>{t('section.timeline' as TeamsXLocaleKey)}（最近 {team.operations.length} 条）</summary>
             <div className={css.timelineBody}>
               {team.operations.map((op, index) => (
                 <div key={`${op.ts}-${index}`} className={css.timelineRow}>
@@ -595,7 +597,7 @@ function TeamCard({ team, t, openMember, readOnly, onSaved }: {
       </div>
 
       <footer className={css.inbox}>
-        <h4 className={css.inboxTitle}>{t('inbox.title')}</h4>
+        <h4 className={css.inboxTitle}>{t('section.inbox' as TeamsXLocaleKey)} · {t('inbox.title')}</h4>
         {team.captainInbox.length === 0
           ? <p className={css.inboxEmpty}>{t('inbox.empty')}</p>
           : (

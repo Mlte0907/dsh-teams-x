@@ -1,1240 +1,694 @@
-/* TeamsX activity panel styles (CSS Modules; compiled inline by tsdown).
-   All colors ride the harness design tokens (--dsw-alias-*) so every surface
-   follows the active light/dark theme automatically; literals are fallbacks
-   only, kept close to the dark-theme values observed in the running host. */
+/**
+ * TeamsX activity panel — component stylesheet.
+ *
+ * v0.8 全量重构：三层 token（primitive → DSW 语义别名 → --tx-* 组件层）
+ * + taste-skill 反模板规范 + Emil Kowalski 动效决策框架 + design-system
+ * token 架构。所有组件只引用 --tx-*，主题适配由 DSW 别名承担。
+ * @module dsh-teams-x/client/ActivityPanel.module.css
+ */
 
+/* ────────────────────────────────────────────────────────────
+   1. Component tokens（--tx-*：面板唯一的取值入口）
+   ──────────────────────────────────────────────────────────── */
+.panel,
+.panelWindow,
+.panelSheet {
+  /* 文本 */
+  --tx-text-1: var(--dsw-alias-label-primary, #e6e8ec);
+  --tx-text-2: var(--dsw-alias-label-secondary, #a8adb4);
+  --tx-text-3: var(--dsw-alias-label-tertiary, #7d828a);
+  --tx-text-on-accent: var(--dsw-alias-label-primary-foreground, #0f1115);
+
+  /* 表面与描边 */
+  --tx-surface: transparent;
+  --tx-surface-hover: var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.08));
+  --tx-hairline: var(--dsw-alias-border-l2, #3c3c3d);
+
+  /* 语义色（单一色族 + 状态色） */
+  --tx-accent: var(--dsw-alias-state-business-primary, #679efe);
+  --tx-ok: var(--dsw-alias-state-success-primary, #22c55e);
+  --tx-warn: var(--dsw-alias-state-warn-primary, #f59e0b);
+  --tx-bad: var(--dsw-alias-state-error-primary, #f25a5a);
+
+  /* 字阶 */
+  --tx-fs-2xs: 10px;
+  --tx-fs-xs: 11px;
+  --tx-fs-sm: 12px;
+  --tx-fs-md: 12.5px;
+  --tx-fs-lg: 14px;
+
+  /* 间距（4 的倍率 + 光学校准位） */
+  --tx-sp-1: 2px;
+  --tx-sp-2: 4px;
+  --tx-sp-3: 6px;
+  --tx-sp-4: 8px;
+  --tx-sp-5: 12px;
+  --tx-sp-6: 16px;
+
+  /* 圆角层级：外容器更柔、内部件更紧 */
+  --tx-r-sm: 4px;
+  --tx-r-md: 6px;
+  --tx-r-lg: 10px;
+
+  /* 动效（Emil: 自定义曲线；条目 ease-out、屏上 ease-in-out、恒定 linear） */
+  --tx-ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --tx-ease-inout: cubic-bezier(0.77, 0, 0.175, 1);
+  --tx-dur-press: 120ms;
+  --tx-dur-ctl: 160ms;
+  --tx-dur-ui: 220ms;
+
+  /* 字体 */
+  --tx-mono: var(--dsw-font-family-mono, ui-monospace, 'SF Mono', 'JetBrains Mono', monospace);
+}
+
+/* ────────────────────────────────────────────────────────────
+   2. 面板壳：悬浮徽标 / 下拉窗 / 移动端底板
+   ──────────────────────────────────────────────────────────── */
 .panel {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  overflow-y: auto;
-  padding: 12px;
-  font-size: 13px;
-  color: var(--dsw-alias-label-primary, #f9fafb);
-}
-
-/* Collapsed badge: an in-flow chip inside the session header's action list,
-   next to the autonomous-mode and Session-log controls. It only renders for
-   sessions that own or participate in a team. */
-.badgeFab {
+  position: relative;
   display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  height: 26px;
-  padding: 0 10px;
-  border-radius: 999px;
-  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
-  background: var(--dsw-alias-bg-layer-2, #2c2c2e);
-  color: var(--dsw-alias-state-business-primary, #679efe);
-  font-size: 12px;
-  cursor: pointer;
-  transition: border-color 120ms ease, background 120ms ease;
 }
 
-.badgeFab:hover {
-  border-color: var(--dsw-alias-state-business-primary, #679efe);
-}
-
-/* The logo must never intercept clicks aimed at the badge button. */
-.badgeFab svg,
-.memberLink svg {
-  pointer-events: none;
-}
-
-.badgeFab[data-expanded] {
-  border-color: var(--dsw-alias-state-business-primary, #679efe);
-  background: var(--dsw-alias-interactive-bg-active, rgba(255, 255, 255, 0.14));
-}
-
-.badgeFabCount {
-  color: var(--dsw-alias-label-primary, #f9fafb);
-  font-weight: 600;
-}
-
-.badgeFabBusy {
-  min-width: 16px;
-  height: 16px;
-  padding: 0 4px;
-  border-radius: 999px;
-  background: var(--dsw-alias-state-business-primary, #679efe);
-  color: var(--dsw-alias-label-primary-foreground, #0f1115);
-  font-size: 10px;
+.badgeFab {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  animation: teamsx-pulse 1.6s ease-in-out infinite;
+  gap: 5px;
+  width: 30px;
+  height: 26px;
+  border: 1px solid var(--tx-hairline);
+  border-radius: var(--tx-r-md);
+  background: transparent;
+  color: var(--tx-text-2);
+  cursor: pointer;
+  transition: background-color var(--tx-dur-ctl) var(--tx-ease-out),
+    color var(--tx-dur-ctl) var(--tx-ease-out),
+    transform var(--tx-dur-press) var(--tx-ease-out);
+}
+.badgeFab:hover {
+  background: var(--tx-surface-hover);
+  color: var(--tx-text-1);
+}
+.badgeFab:active {
+  transform: scale(0.97);
+}
+.badgeFab svg,
+.memberLink svg {
+  flex-shrink: 0;
+}
+.badgeFab[data-expanded] {
+  background: var(--tx-surface-hover);
+  color: var(--tx-text-1);
+}
+.badgeFabCount {
+  font-family: var(--tx-mono);
+  font-size: var(--tx-fs-2xs);
+  line-height: 1;
+}
+.badgeFabBusy {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--tx-accent);
+  animation: teamsx-pulse 1.6s var(--tx-ease-inout) infinite;
 }
 
-/* Expanded panel window: a fixed-position card portaled to document.body,
-   anchored under the badge via inline top/right from usePanelPlacement. */
+/* 桌面下拉窗：从徽标原点展开（Emil: origin-aware，永不用 scale(0)） */
 .panelWindow {
   position: fixed;
-  width: 400px;
-  max-width: calc(100vw - 32px);
+  z-index: 60;
+  width: 420px;
+  max-width: calc(100vw - 16px);
   max-height: min(72vh, 640px);
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
-  border-radius: 12px;
-  background: var(--dsw-alias-bg-layer-1, #232324);
-  box-shadow: 0 8px 28px var(--dsw-alias-bg-mask-drop, rgba(39, 39, 48, 0.7));
-  font-size: 13px;
-  color: var(--dsw-alias-label-primary, #f9fafb);
-  animation: teamsx-enter 140ms ease;
+  padding: var(--tx-sp-4);
+  border: 1px solid var(--tx-hairline);
+  border-radius: var(--tx-r-lg);
+  background: var(--dsw-alias-surface-primary, #16171a);
+  box-shadow: 0 12px 32px color-mix(in srgb, #000 32%, transparent);
+  transform-origin: top left;
+  animation: teamsx-window-in var(--tx-dur-ui) var(--tx-ease-out) both;
+}
+@keyframes teamsx-window-in {
+  from { opacity: 0; transform: scale(0.97) translateY(-4px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
 }
 
-@keyframes teamsx-enter {
-  from { opacity: 0; transform: translateY(4px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
-/* Mobile bottom sheet: full-width, slides up, simplified. No badge-relative
-   positioning (the source of the off-screen clipping), no probing. */
+/* 移动端底板：从底部滑入，抽屉曲线 */
 .panelSheet {
   position: fixed;
+  z-index: 60;
   left: 0;
   right: 0;
   bottom: 0;
-  max-height: 78vh;
+  max-height: 78dvh;
   overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 10px 12px 16px;
-  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
-  border-bottom: none;
-  border-radius: 14px 14px 0 0;
-  background: var(--dsw-alias-bg-layer-1, #232324);
-  box-shadow: 0 -8px 28px var(--dsw-alias-bg-mask-drop, rgba(39, 39, 48, 0.7));
-  font-size: 13px;
-  color: var(--dsw-alias-label-primary, #f9fafb);
-  animation: teamsx-sheet-up 160ms ease;
-  z-index: 1000;
+  padding: var(--tx-sp-5) var(--tx-sp-4) calc(env(safe-area-inset-bottom, 0px) + var(--tx-sp-5));
+  border: none;
+  border-top: 1px solid var(--tx-hairline);
+  border-radius: var(--tx-r-lg) var(--tx-r-lg) 0 0;
+  background: var(--dsw-alias-surface-primary, #16171a);
+  animation: teamsx-sheet-up 280ms var(--tx-ease-inout) both;
 }
-
 @keyframes teamsx-sheet-up {
   from { opacity: 0; transform: translateY(24px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
-/* Mobile overrides live at the END of this file, AFTER the base rules:
-   equal specificity makes source order the tiebreak, so an override block
-   placed before the base rules silently loses (the .refreshButton 24px base
-   beat the 34px mobile override, 2026-09-10). */
-
+/* ────────────────────────────────────────────────────────────
+   3. 面板头部：标题 + 视图切换 + 刷新
+   ──────────────────────────────────────────────────────────── */
 .panelHeader {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--tx-sp-3);
+  padding: 0 0 var(--tx-sp-4);
+  border-bottom: 1px solid var(--tx-hairline);
+  margin-bottom: var(--tx-sp-4);
 }
-
 .panelTitle {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin: 0;
-  font-size: 14px;
+  font-size: var(--tx-fs-sm);
   font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--tx-text-1);
 }
-
-/* Right-Sidebar tab chip: the glyph before the label, plus a trailing gutter so
-   the active chip's fade lands past the text instead of on its last glyphs
-   (panel-hosts.tsx). */
-.tabTitleIcon {
-  flex: none;
-  margin-right: 6px;
-}
-
-.tabTitleLabel {
-  padding-right: 4px;
-}
-
-/* Title-right action group: refresh + close as compact ghost icons. */
 .panelActions {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
+  gap: var(--tx-sp-2);
 }
-
-/* Segmented Live/Archive mode toggle. */
 .modeToggle {
   display: inline-flex;
-  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
-  border-radius: 6px;
-  overflow: hidden;
-  font-size: 11px;
+  padding: 2px;
+  border: 1px solid var(--tx-hairline);
+  border-radius: var(--tx-r-md);
+  background: transparent;
 }
-
 .modeOption {
   border: none;
   background: transparent;
-  color: var(--dsw-alias-label-secondary, #a8adb4);
+  color: var(--tx-text-3);
+  font-size: var(--tx-fs-2xs);
   padding: 2px 8px;
+  border-radius: var(--tx-r-sm);
   cursor: pointer;
-  transition: background 100ms ease, color 100ms ease;
+  transition: background-color var(--tx-dur-ctl) var(--tx-ease-out),
+    color var(--tx-dur-ctl) var(--tx-ease-out);
 }
-
 .modeOption:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+  color: var(--tx-text-1);
 }
-
 .modeActive {
-  background: var(--dsw-alias-state-business-primary, #679efe);
-  color: var(--dsw-alias-label-primary-foreground, #0f1115);
+  background: var(--tx-surface-hover);
+  color: var(--tx-text-1);
 }
-
-/* Read-only archived team cards. */
-.teamCard[data-archived] {
-  opacity: 0.85;
-}
-
-.teamCard[data-archived] .stopButton,
-.teamCard[data-archived] .memberPause {
-  display: none;
-}
-
 .refreshButton {
-  border: none;
-  background: transparent;
-  color: var(--dsw-alias-label-secondary, #a8adb4);
-  border-radius: 6px;
-  width: 24px;
-  height: 24px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 13px;
+  width: 22px;
+  height: 22px;
+  border: none;
+  border-radius: var(--tx-r-sm);
+  background: transparent;
+  color: var(--tx-text-3);
   cursor: pointer;
+  transition: background-color var(--tx-dur-ctl) var(--tx-ease-out),
+    color var(--tx-dur-ctl) var(--tx-ease-out);
 }
-
 .refreshButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
-  color: var(--dsw-alias-label-primary, #f9fafb);
+  background: var(--tx-surface-hover);
+  color: var(--tx-text-1);
 }
 
+/* ────────────────────────────────────────────────────────────
+   4. 全局面板状态：错误 / 空
+   ──────────────────────────────────────────────────────────── */
 .emptyState {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 28px 16px;
-  border: 1px dashed var(--dsw-alias-border-l2, #3c3c3d);
-  border-radius: 10px;
-  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.04));
+  gap: var(--tx-sp-3);
+  padding: var(--tx-sp-6) var(--tx-sp-4);
+  color: var(--tx-text-3);
 }
-
-.emptyLogo {
-  color: var(--dsw-alias-state-business-primary, #679efe);
-  opacity: 0.5;
-}
-
-.panelEmpty {
-  color: var(--dsw-alias-label-tertiary, #7d828a);
-  text-align: center;
-  font-size: 12px;
-  line-height: 1.4;
-}
+.emptyLogo { opacity: 0.4; }
+.panelEmpty { margin: 0; font-size: var(--tx-fs-xs); text-align: center; }
 
 .errorBox {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: var(--tx-sp-3);
+  padding: var(--tx-sp-3) var(--tx-sp-4);
+  border: 1px solid color-mix(in srgb, var(--tx-bad) 35%, transparent);
+  border-radius: var(--tx-r-md);
+  background: color-mix(in srgb, var(--tx-bad) 10%, transparent);
+  margin-bottom: var(--tx-sp-4);
 }
-
-.panelError {
-  color: var(--dsw-alias-state-error-primary, #f25a5a);
-}
-
+.panelError { margin: 0; font-size: var(--tx-fs-xs); color: var(--tx-bad); }
 .retryButton {
-  border: 1px solid var(--dsw-alias-state-error-primary, #f25a5a);
-  background: transparent;
-  color: var(--dsw-alias-state-error-primary, #f25a5a);
-  border-radius: 6px;
-  padding: 3px 10px;
-  font-size: 12px;
-  cursor: pointer;
   flex-shrink: 0;
+  border: 1px solid var(--tx-hairline);
+  border-radius: var(--tx-r-sm);
+  background: transparent;
+  color: var(--tx-text-2);
+  font-size: var(--tx-fs-2xs);
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: background-color var(--tx-dur-ctl) var(--tx-ease-out);
 }
-
-.retryButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover-danger, rgba(242, 90, 90, 0.15));
-}
+.retryButton:hover { background: var(--tx-surface-hover); color: var(--tx-text-1); }
 
 .teamList {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: var(--tx-sp-4);
 }
 
+/* ────────────────────────────────────────────────────────────
+   5. 团队卡：hairline 容器 + 微标签分节
+   ──────────────────────────────────────────────────────────── */
 .teamCard {
-  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
-  border-radius: 10px;
-  padding: 10px;
+  border: 1px solid var(--tx-hairline);
+  border-radius: var(--tx-r-lg);
+  padding: var(--tx-sp-4);
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  background: var(--dsw-alias-bg-layer-2, #2c2c2e);
+  gap: var(--tx-sp-4);
 }
+.teamCard[data-halted] { opacity: 0.62; }
 
-.teamCard[data-halted] {
-  opacity: 0.75;
-}
-
-/* Staged-plan review bar: approve / return-to-chat / discard. */
-.planBar {
-  border: 1px solid var(--dsw-alias-state-business-primary, #679efe);
-  border-radius: 8px;
-  padding: 8px 10px;
+.teamHeader {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
+  align-items: flex-start;
+  gap: var(--tx-sp-3);
 }
-
-.planBarText {
+.teamLogo {
+  flex-shrink: 0;
+  margin-top: 1px;
+  color: var(--tx-accent);
+}
+.teamTitleBlock { flex: 1; min-width: 0; }
+.teamName {
   margin: 0;
-  font-size: 12px;
+  font-size: var(--tx-fs-lg);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+  color: var(--tx-text-1);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-
-.planError {
-  margin: 0;
-  color: var(--dsw-alias-state-error-primary, #f25a5a);
-  font-size: 12px;
+.teamGoal {
+  margin: 2px 0 0;
+  font-size: var(--tx-fs-xs);
+  line-height: 1.45;
+  color: var(--tx-text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
-
-.planActions {
+.teamBadges {
   display: flex;
-  align-items: center;
-  gap: 6px;
   flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: var(--tx-sp-2);
+}
+.badge,
+.badgeMuted,
+.badgeWarn {
+  display: inline-flex;
+  align-items: center;
+  font-size: var(--tx-fs-2xs);
+  line-height: 16px;
+  padding: 0 7px;
+  border-radius: 999px;
+  font-variant-numeric: tabular-nums;
+}
+.badge {
+  background: color-mix(in srgb, var(--tx-accent) 12%, transparent);
+  color: var(--tx-accent);
+}
+.badgeMuted {
+  background: color-mix(in srgb, var(--tx-text-3) 10%, transparent);
+  color: var(--tx-text-3);
+}
+.badgeWarn {
+  background: color-mix(in srgb, var(--tx-warn) 12%, transparent);
+  color: var(--tx-warn);
 }
 
+.stopButton {
+  flex-shrink: 0;
+  border: 1px solid var(--tx-hairline);
+  border-radius: var(--tx-r-md);
+  background: transparent;
+  color: var(--tx-text-3);
+  font-size: var(--tx-fs-2xs);
+  padding: 3px 9px;
+  cursor: pointer;
+  transition: color var(--tx-dur-ctl) var(--tx-ease-out),
+    border-color var(--tx-dur-ctl) var(--tx-ease-out);
+}
+.stopButton:hover {
+  color: var(--tx-bad);
+  border-color: color-mix(in srgb, var(--tx-bad) 40%, transparent);
+}
+
+.stopConfirmBox {
+  border: 1px solid color-mix(in srgb, var(--tx-bad) 35%, transparent);
+  border-radius: var(--tx-r-md);
+  background: color-mix(in srgb, var(--tx-bad) 8%, transparent);
+  padding: var(--tx-sp-3) var(--tx-sp-4);
+}
+.stopConfirmBox p { margin: 0 0 var(--tx-sp-2); font-size: var(--tx-fs-xs); color: var(--tx-text-2); }
+.stopError { margin: 0 0 var(--tx-sp-2); font-size: var(--tx-fs-2xs); color: var(--tx-bad); }
+.stopActions { display: flex; justify-content: flex-end; gap: var(--tx-sp-2); }
+.stopCancel,
+.stopConfirm {
+  border-radius: var(--tx-r-sm);
+  padding: 3px 10px;
+  font-size: var(--tx-fs-xs);
+  cursor: pointer;
+}
+.stopCancel {
+  border: 1px solid var(--tx-hairline);
+  background: transparent;
+  color: var(--tx-text-2);
+}
+.stopConfirm {
+  border: none;
+  background: var(--tx-bad);
+  color: var(--tx-text-on-accent);
+}
+
+/* 微标签：编辑体（uppercase 微距排印）*/
+.sectionLabel {
+  margin: 0 0 var(--tx-sp-2);
+  font-size: var(--tx-fs-2xs);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tx-text-3);
+}
+
+/* ────────────────────────────────────────────────────────────
+   6. Staged 计划审核条 + 编辑器
+   ──────────────────────────────────────────────────────────── */
+.planBar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tx-sp-2);
+  padding: var(--tx-sp-3) var(--tx-sp-4);
+  border: 1px solid color-mix(in srgb, var(--tx-accent) 30%, transparent);
+  border-radius: var(--tx-r-md);
+  background: color-mix(in srgb, var(--tx-accent) 8%, transparent);
+}
+.planBarText { margin: 0; font-size: var(--tx-fs-xs); color: var(--tx-text-2); }
+.planError { margin: 0; font-size: var(--tx-fs-2xs); color: var(--tx-bad); }
+.planActions { display: flex; flex-wrap: wrap; gap: var(--tx-sp-2); }
 .planApprove,
 .planChat,
 .planDiscard,
 .planDiscardArm,
 .planCancel {
-  border-radius: 6px;
-  padding: 3px 10px;
-  font-size: 12px;
+  border-radius: var(--tx-r-sm);
+  padding: 3px 12px;
+  font-size: var(--tx-fs-xs);
   cursor: pointer;
+  transition: background-color var(--tx-dur-ctl) var(--tx-ease-out),
+    color var(--tx-dur-ctl) var(--tx-ease-out),
+    transform var(--tx-dur-press) var(--tx-ease-out);
 }
-
+.planApprove:active,
+.planChat:active,
+.planDiscard:active,
+.planDiscardArm:active,
+.planCancel:active {
+  transform: scale(0.97);
+}
 .planApprove {
-  border: none;
-  background: var(--dsw-alias-state-business-primary, #679efe);
-  color: var(--dsw-alias-label-primary-foreground, #0f1115);
-  font-weight: 600;
+  border: 1px solid transparent;
+  background: var(--tx-accent);
+  color: var(--tx-text-on-accent);
 }
-
+.planApprove:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--tx-accent) 85%, #000);
+}
 .planApprove:disabled {
   opacity: 0.45;
   cursor: default;
 }
-
 .planChat,
 .planDiscardArm,
 .planCancel {
-  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
+  border: 1px solid var(--tx-hairline);
   background: transparent;
-  color: var(--dsw-alias-label-primary, #f9fafb);
+  color: var(--tx-text-2);
 }
-
 .planChat:hover:not(:disabled),
 .planDiscardArm:hover:not(:disabled) {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+  background: var(--tx-surface-hover);
+  color: var(--tx-text-1);
 }
-
 .planDiscard {
-  border: none;
-  background: var(--dsw-alias-state-error-primary, #f25a5a);
-  color: var(--dsw-alias-label-primary-foreground, #0f1115);
+  border: 1px solid color-mix(in srgb, var(--tx-bad) 40%, transparent);
+  background: color-mix(in srgb, var(--tx-bad) 12%, transparent);
+  color: var(--tx-bad);
 }
 
-.teamHeader {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.teamLogo {
-  color: var(--dsw-alias-state-business-primary, #679efe);
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.teamTitleBlock {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.teamName {
-  margin: 0;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.teamGoal {
-  margin: 2px 0 0;
-  color: var(--dsw-alias-label-secondary, #a8adb4);
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.teamBadges {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.badge,
-.badgeMuted,
-.badgeWarn {
-  border-radius: 999px;
-  padding: 1px 8px;
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-.badge {
-  background: var(--dsw-alias-interactive-bg-active, rgba(255, 255, 255, 0.14));
-  color: var(--dsw-alias-state-business-primary, #679efe);
-}
-
-.badgeMuted {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
-  color: var(--dsw-alias-label-secondary, #a8adb4);
-}
-
-.badgeWarn {
-  background: var(--dsw-alias-state-warn-tertiary, #27241f);
-  color: var(--dsw-alias-state-warn-label, #dd8629);
-}
-
-.stopButton {
-  align-self: center;
-  border: 1px solid var(--dsw-alias-state-error-primary, #f25a5a);
-  color: var(--dsw-alias-state-error-primary, #f25a5a);
-  background: transparent;
-  border-radius: 6px;
-  padding: 2px 10px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.stopButton:hover {
-  background: var(--dsw-alias-interactive-bg-hover-danger, rgba(242, 90, 90, 0.15));
-}
-
-.stopConfirmBox {
-  border: 1px solid var(--dsw-alias-state-error-primary, #f25a5a);
-  border-radius: 8px;
-  padding: 8px 10px;
+.planEditor {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--tx-sp-3);
+  border: 1px dashed var(--tx-hairline);
+  border-radius: var(--tx-r-md);
+  padding: var(--tx-sp-3) var(--tx-sp-4);
 }
-
-.stopConfirmBox p {
-  margin: 0;
-}
-
-.stopError {
-  color: var(--dsw-alias-state-error-primary, #f25a5a);
-}
-
-.stopActions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-.stopCancel,
-.stopConfirm {
-  border-radius: 6px;
-  padding: 2px 10px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.stopCancel {
-  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
-  background: transparent;
-  color: inherit;
-}
-
-.stopConfirm {
+.planEditorToggle {
   border: none;
-  background: var(--dsw-alias-state-error-primary, #f25a5a);
-  color: var(--dsw-alias-label-primary-foreground, #0f1115);
+  background: transparent;
+  color: var(--tx-text-2);
+  font-size: var(--tx-fs-xs);
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+  transition: color var(--tx-dur-ctl) var(--tx-ease-out);
 }
+.planEditorToggle:hover { color: var(--tx-text-1); }
+.planEditorSection {
+  display: flex;
+  flex-direction: column;
+  gap: var(--tx-sp-2);
+}
+.planEditorHeading {
+  margin: 0;
+  font-size: var(--tx-fs-2xs);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tx-text-3);
+}
+.planEditorRow {
+  display: grid;
+  grid-template-columns: minmax(64px, 0.8fr) minmax(0, 1.4fr) minmax(96px, 1fr) auto;
+  gap: var(--tx-sp-2);
+  align-items: center;
+}
+.planEditorRow[data-remove] { opacity: 0.45; }
+.planEditorInput,
+.planEditorSubject,
+.planEditorName {
+  border: 1px solid var(--tx-hairline);
+  border-radius: var(--tx-r-sm);
+  background: transparent;
+  color: var(--tx-text-1);
+  font-size: var(--tx-fs-xs);
+  padding: 3px 7px;
+  min-width: 0;
+}
+.planEditorInput:focus,
+.planEditorSubject:focus,
+.planEditorName:focus {
+  outline: none;
+  border-color: var(--tx-accent);
+}
+.planEditorTaskId {
+  font-family: var(--tx-mono);
+  font-size: var(--tx-fs-2xs);
+  color: var(--tx-text-3);
+}
+.planEditorRemove {
+  border: none;
+  background: transparent;
+  color: var(--tx-text-3);
+  cursor: pointer;
+  font-size: var(--tx-fs-xs);
+  padding: 2px 6px;
+  border-radius: var(--tx-r-sm);
+  transition: color var(--tx-dur-ctl) var(--tx-ease-out);
+}
+.planEditorRemove:hover { color: var(--tx-bad); }
+.planEditorActions { display: flex; gap: var(--tx-sp-2); }
+.planEditorAdd {
+  border: 1px dashed var(--tx-hairline);
+  border-radius: var(--tx-r-sm);
+  background: transparent;
+  color: var(--tx-text-2);
+  font-size: var(--tx-fs-2xs);
+  padding: 3px 10px;
+  cursor: pointer;
+  transition: color var(--tx-dur-ctl) var(--tx-ease-out),
+    border-color var(--tx-dur-ctl) var(--tx-ease-out);
+}
+.planEditorAdd:hover { color: var(--tx-text-1); border-color: var(--tx-text-3); }
+.planEditorEmpty { margin: 0; font-size: var(--tx-fs-2xs); color: var(--tx-text-3); }
 
+/* ────────────────────────────────────────────────────────────
+   7. 成员名册
+   ──────────────────────────────────────────────────────────── */
 .roster {
   display: flex;
   flex-direction: column;
-  gap: 2px;
 }
-
 .memberRow {
   display: grid;
   grid-template-columns: 22px minmax(72px, 1.2fr) minmax(0, 1.6fr) auto auto minmax(96px, auto);
   align-items: center;
-  gap: 6px;
-  padding: 3px 4px;
-  border-radius: 6px;
+  gap: var(--tx-sp-3);
+  padding: var(--tx-sp-2) var(--tx-sp-2);
+  border-radius: var(--tx-r-md);
+  transition: background-color var(--tx-dur-ctl) var(--tx-ease-out);
 }
-
+.memberRow:hover { background: var(--tx-surface-hover); }
 .memberRow[data-activity='working'] {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+  background: color-mix(in srgb, var(--tx-accent) 7%, transparent);
 }
-
-.memberIcon {
-  display: inline-flex;
-  color: var(--dsw-alias-state-business-primary, #679efe);
-}
-
+.memberIcon { display: inline-flex; color: var(--tx-accent); }
 .memberName {
-  font-weight: 600;
+  font-weight: 500;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-/* Member name as a transcript link when the member has a child session. */
 .memberLink {
   border: none;
   background: transparent;
   color: inherit;
   font: inherit;
-  font-weight: 600;
+  font-weight: 500;
   padding: 0;
   cursor: pointer;
   text-decoration: none;
-  border-bottom: 1px dotted var(--dsw-alias-border-l2, #3c3c3d);
+  border-bottom: 1px dotted var(--tx-hairline);
+  transition: color var(--tx-dur-ctl) var(--tx-ease-out),
+    border-color var(--tx-dur-ctl) var(--tx-ease-out);
 }
-
 .memberLink:hover {
-  color: var(--dsw-alias-state-business-primary, #679efe);
-  border-bottom-color: var(--dsw-alias-state-business-primary, #679efe);
+  color: var(--tx-accent);
+  border-bottom-color: var(--tx-accent);
 }
-
 .memberMeta {
-  color: var(--dsw-alias-label-tertiary, #7d828a);
-  font-size: 11px;
+  color: var(--tx-text-3);
+  font-size: var(--tx-fs-2xs);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
+.memberTokens { font-family: var(--tx-mono); font-variant-numeric: tabular-nums; }
 .memberProgress {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   font-variant-numeric: tabular-nums;
-  font-size: 11px;
-  color: var(--dsw-alias-label-secondary, #a8adb4);
+  font-size: var(--tx-fs-2xs);
+  color: var(--tx-text-2);
 }
-
 .memberProgressBar {
   width: 42px;
   height: 3px;
   border-radius: 999px;
-  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
+  background: var(--tx-surface-hover);
   overflow: hidden;
   display: inline-block;
 }
-
 .memberProgressFill {
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: var(--dsw-alias-label-tertiary, #7d828a);
+  background: var(--tx-text-3);
+  transition: width var(--tx-dur-ui) var(--tx-ease-out);
 }
-
-.memberProgressFill[data-active] {
-  background: var(--dsw-alias-state-business-primary, #679efe);
-}
-
-.memberProgressFill[data-done] {
-  background: var(--dsw-alias-state-success-primary, #22c55e);
-}
-
+.memberProgressFill[data-active] { background: var(--tx-accent); }
+.memberProgressFill[data-done] { background: var(--tx-ok); }
 .memberUnread {
-  background: var(--dsw-alias-state-error-primary, #f25a5a);
-  color: var(--dsw-alias-label-primary-foreground, #0f1115);
+  background: var(--tx-bad);
+  color: var(--tx-text-on-accent);
   border-radius: 999px;
-  font-size: 10px;
+  font-size: var(--tx-fs-2xs);
   min-width: 16px;
   height: 16px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   padding: 0 4px;
+  font-variant-numeric: tabular-nums;
 }
-
 .memberState {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: 11px;
-  color: var(--dsw-alias-label-secondary, #a8adb4);
+  font-size: var(--tx-fs-2xs);
+  color: var(--tx-text-2);
 }
-
-/* Per-member pause: a tiny ghost button that appears on working members. */
 .memberPause {
   border: none;
   background: transparent;
-  color: var(--dsw-alias-label-tertiary, #7d828a);
+  color: var(--tx-text-3);
   width: 18px;
   height: 18px;
-  border-radius: 4px;
+  border-radius: var(--tx-r-sm);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  font-size: 10px;
   cursor: pointer;
+  transition: background-color var(--tx-dur-ctl) var(--tx-ease-out),
+    color var(--tx-dur-ctl) var(--tx-ease-out);
 }
-
 .memberPause:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
-  color: var(--dsw-alias-state-warn-primary, #f59e0b);
+  background: var(--tx-surface-hover);
+  color: var(--tx-warn);
 }
+.memberPause:disabled { opacity: 0.5; cursor: default; }
 
-.memberPause:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.dag {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-}
-
-/* Depth lane strip: vertical colored lines showing dependency hierarchy. */
-.taskLane {
-  display: inline-flex;
-  flex-direction: column;
-  gap: 0;
-  align-self: stretch;
-  width: 16px;
-  margin-right: -6px;
-}
-
-.taskLaneSegment {
-  display: block;
-  flex: 1;
-  border-left: 2px solid;
-  border-radius: 0 0 0 2px;
-  animation: lane-enter 300ms ease both;
-}
-
-@keyframes lane-enter {
-  from { opacity: 0; transform: scaleY(0.6); }
-  to { opacity: 1; transform: scaleY(1); }
-}
-
-.taskLaneSegment[data-depth="0"] { border-left-color: var(--dsw-alias-state-business-primary, #679efe); }
-.taskLaneSegment[data-depth="1"] { border-left-color: var(--dsw-alias-state-success-primary, #22c55e); }
-.taskLaneSegment[data-depth="2"] { border-left-color: var(--dsw-alias-state-warn-primary, #f59e0b); }
-.taskLaneSegment[data-depth="3"] { border-left-color: var(--dsw-alias-state-error-primary, #f25a5a); }
-
-.taskRow {
-  display: grid;
-  grid-template-columns: auto 18px 34px minmax(0, 1fr) auto auto;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 4px;
-  border-radius: 6px;
-  border: 1px solid transparent;
-}
-
-.taskRow[data-state='running'] {
-  border-color: var(--dsw-alias-state-business-primary, #679efe);
-}
-
-.taskRow[data-state='failed'] {
-  background: var(--dsw-alias-interactive-bg-hover-danger, rgba(242, 90, 90, 0.15));
-}
-
-.taskIcon {
-  display: inline-flex;
-}
-
-.taskRow[data-state='completed'] .taskIcon { color: var(--dsw-alias-state-success-primary, #22c55e); }
-.taskRow[data-state='failed'] .taskIcon { color: var(--dsw-alias-state-error-primary, #f25a5a); }
-.taskRow[data-state='running'] .taskIcon { color: var(--dsw-alias-state-business-primary, #679efe); }
-.taskRow[data-state='blocked'] .taskIcon { color: var(--dsw-alias-state-warn-primary, #f59e0b); }
-
-.taskId {
-  font-family: var(--dsw-font-family, inherit);
-  font-size: 11px;
-  color: var(--dsw-alias-label-tertiary, #7d828a);
-  letter-spacing: 0.02em;
-}
-
-.taskSubject {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.taskDepList {
-  display: inline-flex;
-  gap: 3px;
-  margin-left: 6px;
-}
-
-.taskDepTag {
-  font-size: 10px;
-  padding: 0 5px;
-  border-radius: 999px;
-  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
-  color: var(--dsw-alias-label-tertiary, #7d828a);
-  white-space: nowrap;
-}
-
-.taskAssignee {
-  font-size: 11px;
-  color: var(--dsw-alias-label-secondary, #a8adb4);
-}
-
-.taskStatus {
-  font-size: 11px;
-  white-space: nowrap;
-}
-
-/* Status text rides the same state hues as its icon, so a row is scannable
-   by color alone without reading the words. */
-.taskRow[data-state='completed'] .taskStatus { color: var(--dsw-alias-state-success-primary, #22c55e); }
-.taskRow[data-state='failed'] .taskStatus { color: var(--dsw-alias-state-error-primary, #f25a5a); }
-.taskRow[data-state='running'] .taskStatus { color: var(--dsw-alias-state-business-primary, #679efe); }
-.taskRow[data-state='blocked'] .taskStatus { color: var(--dsw-alias-state-warn-primary, #f59e0b); }
-
-.inbox {
-  border-top: 1px dashed var(--dsw-alias-border-l2, #3c3c3d);
-  padding-top: 6px;
-}
-
-.inboxTitle {
-  margin: 0 0 4px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--dsw-alias-label-tertiary, #7d828a);
-}
-
-.inboxEmpty {
-  margin: 0;
-  color: var(--dsw-alias-label-tertiary, #7d828a);
-  font-size: 12px;
-}
-
-.inboxList {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.inboxItem {
-  display: flex;
-  gap: 6px;
-  font-size: 12px;
-}
-
-.inboxFrom {
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
-.inboxContent {
-  color: var(--dsw-alias-label-secondary, #a8adb4);
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-/* ── animation classes (all-SVG action states) ── */
-
-.animPulse {
-  animation: teamsx-pulse 1.6s ease-in-out infinite;
-  transform-origin: center;
-}
-
-@keyframes teamsx-pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.55; transform: scale(0.92); }
-}
-
-.animSend {
-  animation: teamsx-send 1.4s ease-in-out infinite;
-  transform-origin: center;
-}
-
-@keyframes teamsx-send {
-  0%, 100% { transform: translateX(0); opacity: 0.7; }
-  50% { transform: translateX(2px); opacity: 1; }
-}
-
-.animCelebrate {
-  animation: teamsx-celebrate 1.8s ease-in-out infinite;
-  transform-origin: bottom center;
-}
-
-@keyframes teamsx-celebrate {
-  0%, 100% { transform: scale(1) rotate(0deg); }
-  25% { transform: scale(1.1) rotate(-4deg); }
-  75% { transform: scale(1.1) rotate(4deg); }
-}
-
-.animThink {
-  animation: teamsx-think 2s ease-in-out infinite;
-  transform-origin: center;
-}
-
-@keyframes teamsx-think {
-  0%, 100% { transform: rotate(0deg); opacity: 0.8; }
-  50% { transform: rotate(8deg); opacity: 1; }
-}
-
-.animSpin {
-  display: inline-block;
-  animation: teamsx-spin 1.2s linear infinite;
-}
-
-@keyframes teamsx-spin {
-  to { transform: rotate(360deg); }
-}
-
-/* ── Staged-plan editor ─────────────────────────────────────────── */
-
-.planEditor {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  border: 1px dashed var(--dsw-alias-border-l2, #3c3c3d);
-  border-radius: 8px;
-  padding: 8px 10px;
-}
-
-.planEditorToggle {
-  align-self: flex-start;
-  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
-  border-radius: 6px;
-  padding: 3px 10px;
-  font-size: 12px;
-  background: transparent;
-  color: var(--dsw-alias-label-primary, #f9fafb);
-  cursor: pointer;
-}
-
-.planEditorToggle:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(255, 255, 255, 0.08));
-}
-
-.planEditorSection {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.planEditorHeading {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--dsw-alias-label-secondary, #9ba0aa);
-}
-
-.planEditorRow {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.planEditorRow[data-remove] {
-  opacity: 0.45;
-  text-decoration: line-through;
-}
-
-.planEditorName {
-  min-width: 72px;
-  max-width: 110px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.planEditorTaskId {
-  min-width: 28px;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--dsw-alias-label-secondary, #9ba0aa);
-}
-
-.planEditorInput {
-  flex: 1 1 90px;
-  min-width: 0;
-  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
-  border-radius: 5px;
-  padding: 3px 7px;
-  font-size: 12px;
-  background: var(--dsw-alias-input-bg, rgba(255, 255, 255, 0.04));
-  color: var(--dsw-alias-label-primary, #f9fafb);
-}
-
-.planEditorInput:disabled {
-  opacity: 0.5;
-}
-
-.planEditorInput:focus {
-  outline: 1px solid var(--dsw-alias-state-business-primary, #679efe);
-  outline-offset: 0;
-}
-
-.planEditorSubject {
-  flex: 2 1 140px;
-}
-
-.planEditorRemove {
-  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
-  border-radius: 5px;
-  padding: 2px 8px;
-  font-size: 11px;
-  background: transparent;
-  color: var(--dsw-alias-label-secondary, #9ba0aa);
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.planEditorRemove:hover:not(:disabled) {
-  color: var(--dsw-alias-state-error-primary, #f25a5a);
-  border-color: var(--dsw-alias-state-error-primary, #f25a5a);
-}
-
-.planEditorAdd {
-  align-self: flex-start;
-  border: 1px dashed var(--dsw-alias-border-l2, #3c3c3d);
-  border-radius: 5px;
-  padding: 3px 10px;
-  font-size: 12px;
-  background: transparent;
-  color: var(--dsw-alias-label-secondary, #9ba0aa);
-  cursor: pointer;
-}
-
-.planEditorAdd:hover:not(:disabled) {
-  color: var(--dsw-alias-label-primary, #f9fafb);
-}
-
-.planEditorEmpty {
-  margin: 0;
-  font-size: 12px;
-  color: var(--dsw-alias-label-secondary, #9ba0aa);
-}
-
-.planEditorActions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-/* ============================================================
-   Mobile overrides — MUST stay at the end of the file.
-   Base rules above share the same specificity, so source order is the
-   tiebreak: a block placed earlier silently loses (2026-09-10 bug).
-   Breakpoint matches dsh-remote-x's mobile layer (768px) so the sheet
-   mode and the surrounding mobile chrome switch together.
-   ============================================================ */
-@media (max-width: 768px) {
-  .memberRow {
-    grid-template-columns: 22px minmax(0, 1fr) auto;
-    grid-template-rows: auto auto;
-    row-gap: 2px;
-  }
-
-  .memberMeta {
-    display: none;
-  }
-
-  /* Explicit placement. Auto-placement put progress in row 1 col 3 but state in
-     row 2 col 1, and `justify-self: end` then drew the ~40px state chip right
-     aligned inside the 22px icon column — i.e. 14px to the LEFT of the card's
-     content box, hanging over its padding. Pinning each cell keeps the row
-     stable whichever children render (2026-09-10). */
-  .memberIcon { grid-area: 1 / 1; }
-  .memberName { grid-area: 1 / 2; }
-  .memberProgress { grid-area: 1 / 3; justify-self: end; white-space: nowrap; }
-  .memberUnread { grid-area: 2 / 1; justify-self: start; }
-  .memberState { grid-area: 2 / 2; justify-self: start; white-space: nowrap; }
-
-  .taskRow {
-    grid-template-columns: auto 18px 30px minmax(0, 1fr) auto;
-  }
-
-  .taskAssignee {
-    display: none;
-  }
-
-  /* Bottom sheet clears the iOS home indicator. */
-  .panelSheet {
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 16px);
-  }
-
-  /* Touch targets: the desktop controls are 18-24px, too small on a phone. */
-  .refreshButton {
-    width: 34px;
-    height: 34px;
-    font-size: 14px;
-  }
-
-  .modeOption {
-    padding: 6px 12px;
-    font-size: 12px;
-  }
-
-  .stopButton,
-  .stopCancel,
-  .stopConfirm {
-    padding: 7px 14px;
-    font-size: 13px;
-  }
-
-  .memberPause {
-    width: 28px;
-    height: 28px;
-    font-size: 12px;
-  }
-}
-
-/* v0.4 task badges: repair round / shadow takeover / verdict / elapsed time. */
-.taskBadge {
-  display: inline-block;
-  margin-left: 6px;
-  padding: 0 6px;
-  border-radius: 999px;
-  font-size: 10px;
-  line-height: 16px;
-  white-space: nowrap;
-  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
-  color: var(--dsw-alias-label-tertiary, #7d828a);
-  vertical-align: 1px;
-}
-.taskBadge[data-badge='round'] {
-  border-color: var(--dsw-alias-state-warn-primary, #f59e0b);
-  color: var(--dsw-alias-state-warn-primary, #f59e0b);
-}
-.taskBadge[data-badge='taken'] {
-  border-color: var(--dsw-alias-state-business-primary, #679efe);
-  color: var(--dsw-alias-state-business-primary, #679efe);
-}
-.taskBadge[data-badge='pass'] {
-  border-color: var(--dsw-alias-state-success-primary, #22c55e);
-  color: var(--dsw-alias-state-success-primary, #22c55e);
-}
-.taskBadge[data-badge='needs_revision'],
-.taskBadge[data-badge='reject'] {
-  border-color: var(--dsw-alias-state-error-primary, #f25a5a);
-  color: var(--dsw-alias-state-error-primary, #f25a5a);
-}
-
-/* v0.6 member token usage (token-meter projection, best-effort). */
-.memberTokens { color: var(--dsw-alias-label-tertiary, #7d828a); }
-.taskBadge[data-badge='source'] {
-  border-color: var(--dsw-alias-state-business-primary, #679efe);
-  color: var(--dsw-alias-state-business-primary, #679efe);
-}
-
-/* v0.6 operations timeline (collapsed by default). */
-.timeline { margin-top: 10px; border-top: 1px solid var(--dsw-alias-border-l2, #3c3c3d); padding-top: 8px; }
-.timelineSummary {
-  cursor: pointer; font-size: 11px;
-  color: var(--dsw-alias-label-secondary, #8a8f98); user-select: none;
-}
-.timelineBody { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow-y: auto; }
-.timelineRow {
-  display: flex; gap: 8px; font-size: 10.5px; line-height: 1.5;
-  color: var(--dsw-alias-label-secondary, #8a8f98); align-items: baseline;
-}
-.timelineTime { flex-shrink: 0; font-variant-numeric: tabular-nums; }
-.timelineActor { flex-shrink: 0; color: var(--dsw-alias-label-primary, #c9d1d9); }
-.timelineAction { flex-shrink: 0; font-weight: 500; }
-.timelineDetail {
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  color: var(--dsw-alias-label-tertiary, #7d828a);
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   v0.7 taste redesign — anti-slop pass (taste-skill audit)
-   Single accent family · pastel wash badges · tabular data · hairline
-   surfaces · hover/press/focus states · composed empty state ·
-   transform-only motion with reduced-motion respect.
-   ═══════════════════════════════════════════════════════════════ */
-
-/* Data is numeric: ids, counts, elapsed, timestamps read in tabular figures.
-   Meta columns ride a monospace stack for scan-friendly alignment. */
-.taskId,
-.taskBadge,
-.memberProgress,
-.memberUnread,
-.badge,
-.badgeMuted,
-.badgeWarn,
-.timelineTime {
-  font-variant-numeric: tabular-nums;
-}
-.taskId,
-.timelineTime,
-.memberTokens {
-  font-family: var(--dsw-font-family-mono, ui-monospace, 'SF Mono', 'JetBrains Mono', monospace);
-  font-size: 10.5px;
-}
-
-/* Hierarchy between regular and bold: subjects and team names carry 500/600
-   with tightened tracking; the header stays sentence case. */
-.teamName {
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-.taskSubject {
-  font-weight: 500;
-}
-.panelTitle {
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-/* Badge system: no borders — a soft wash of the semantic hue behind
-   matching text (color-mix keeps the wash theme-aware in dark mode). */
-.taskBadge {
-  border: none;
-  background: color-mix(in srgb, currentColor 10%, transparent);
-  font-size: 10px;
-  line-height: 15px;
-  padding: 0 6px;
-  color: var(--dsw-alias-label-secondary, #a8adb4);
-}
-.taskBadge[data-badge='round'],
-.taskBadge[data-badge='source'] {
-  color: var(--dsw-alias-state-warn-primary, #f59e0b);
-}
-.taskBadge[data-badge='taken'] {
-  color: var(--dsw-alias-state-business-primary, #679efe);
-}
-.taskBadge[data-badge='pass'] {
-  color: var(--dsw-alias-state-success-primary, #22c55e);
-}
-.taskBadge[data-badge='needs_revision'],
-.taskBadge[data-badge='reject'] {
-  color: var(--dsw-alias-state-error-primary, #f25a5a);
-}
-.taskBadge[data-badge='progress'] {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  color: var(--dsw-alias-state-business-primary, #679efe);
-}
-
-/* Alive but quiet: rows respond to hover; everything presses and focuses. */
-.taskRow,
-.memberRow {
-  transition: background-color 160ms ease, border-color 160ms ease;
-}
-.taskRow:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.08));
-}
-.memberRow:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.06));
-}
-.taskRow:hover .taskSubject {
-  color: var(--dsw-alias-label-primary, inherit);
-}
-.planApprove,
-.planChat,
-.planDiscard,
-.planDiscardArm,
-.planCancel,
-.stopButton,
-.stopConfirm,
-.stopCancel,
-.modeOption,
-.refreshButton,
-.memberLink,
-.memberPause {
-  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease, transform 120ms ease;
-}
-.planApprove:active,
-.planChat:active,
-.planDiscard:active,
-.planDiscardArm:active,
-.planCancel:active,
-.stopButton:active,
-.stopConfirm:active,
-.stopCancel:active,
-.modeOption:active,
-.refreshButton:active,
-.memberPause:active,
-.memberLink:active {
-  transform: scale(0.98);
-}
-.planApprove:focus-visible,
-.planChat:focus-visible,
-.planDiscard:focus-visible,
-.planDiscardArm:focus-visible,
-.planCancel:focus-visible,
-.stopButton:focus-visible,
-.stopConfirm:focus-visible,
-.stopCancel:focus-visible,
-.modeOption:focus-visible,
-.refreshButton:focus-visible,
-.memberLink:focus-visible,
-.memberPause:focus-visible,
-.taskRow:focus-visible {
-  outline: 2px solid var(--dsw-alias-state-business-primary, #679efe);
-  outline-offset: 1px;
-}
-
-/* Staggered row entry: translate + opacity only (GPU-friendly), capped so
-   long lists never feel like a parade. */
-@keyframes teamsx-row-in {
-  from { opacity: 0; transform: translateY(3px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.taskRow {
-  animation: teamsx-row-in 200ms ease both;
-}
-.taskRow:nth-child(n + 13) {
-  animation: none;
-}
+/* ────────────────────────────────────────────────────────────
+   8. 任务 DAG
+   ──────────────────────────────────────────────────────────── */
+.dag { display: flex; flex-direction: column; }
 
-/* Composed empty state while the captain is still decomposing the goal. */
 .dagEmpty {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding: 14px 10px 10px;
+  gap: var(--tx-sp-2);
+  padding: var(--tx-sp-3) var(--tx-sp-2) var(--tx-sp-2);
 }
 .dagEmptyText {
   margin: 0 0 2px;
-  font-size: 11.5px;
-  color: var(--dsw-alias-label-secondary, #a8adb4);
+  font-size: var(--tx-fs-xs);
+  color: var(--tx-text-3);
 }
 .skeletonRow {
   display: block;
@@ -1242,9 +696,9 @@
   border-radius: 5px;
   background: linear-gradient(
     90deg,
-    var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.10)) 25%,
-    color-mix(in srgb, var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.10)) 40%, transparent) 50%,
-    var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.10)) 75%
+    var(--tx-surface-hover) 25%,
+    color-mix(in srgb, var(--tx-surface-hover) 40%, transparent) 50%,
+    var(--tx-surface-hover) 75%
   );
   background-size: 200% 100%;
   animation: teamsx-skeleton 1.4s ease-in-out infinite;
@@ -1254,12 +708,136 @@
   to { background-position: -200% 0; }
 }
 
-/* Timeline as an actual timeline: a hairline rail with node dots and
-   tabular timestamps, rows lifting on hover. */
+/* 深度泳道：依赖层级竖线 */
+.taskLane {
+  display: inline-flex;
+  flex-direction: column;
+  align-self: stretch;
+  width: 16px;
+  margin-right: -6px;
+}
+.taskLaneSegment {
+  display: block;
+  flex: 1;
+  border-left: 2px solid;
+  border-radius: 0 0 0 2px;
+}
+.taskLaneSegment[data-depth='0'] { border-left-color: var(--tx-accent); }
+.taskLaneSegment[data-depth='1'] { border-left-color: var(--tx-ok); }
+.taskLaneSegment[data-depth='2'] { border-left-color: var(--tx-warn); }
+.taskLaneSegment[data-depth='3'] { border-left-color: var(--tx-bad); }
+
+.taskRow {
+  display: grid;
+  grid-template-columns: auto 18px 34px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: var(--tx-sp-3);
+  padding: var(--tx-sp-2);
+  border-radius: var(--tx-r-md);
+  transition: background-color var(--tx-dur-ctl) var(--tx-ease-out);
+  animation: teamsx-row-in var(--tx-dur-ui) var(--tx-ease-out) both;
+}
+.taskRow:nth-child(n + 13) { animation: none; }
+.taskRow:hover { background: var(--tx-surface-hover); }
+.taskRow[data-state='failed'] {
+  background: color-mix(in srgb, var(--tx-bad) 8%, transparent);
+}
+@keyframes teamsx-row-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.taskIcon { display: inline-flex; }
+.taskRow[data-state='completed'] .taskIcon { color: var(--tx-ok); }
+.taskRow[data-state='failed'] .taskIcon { color: var(--tx-bad); }
+.taskRow[data-state='running'] .taskIcon { color: var(--tx-accent); }
+.taskRow[data-state='blocked'] .taskIcon { color: var(--tx-warn); }
+
+.taskId {
+  font-family: var(--tx-mono);
+  font-size: var(--tx-fs-2xs);
+  color: var(--tx-text-3);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+.taskSubject {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+  color: var(--tx-text-1);
+}
+.taskDepList { display: inline-flex; gap: 3px; margin-left: var(--tx-sp-3); }
+.taskDepTag {
+  font-family: var(--tx-mono);
+  font-size: var(--tx-fs-2xs);
+  padding: 0 5px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--tx-text-3) 10%, transparent);
+  color: var(--tx-text-3);
+  font-variant-numeric: tabular-nums;
+}
+.taskBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: var(--tx-sp-2);
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: var(--tx-fs-2xs);
+  line-height: 15px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+  color: var(--tx-text-3);
+  background: color-mix(in srgb, currentColor 10%, transparent);
+}
+.taskBadge[data-badge='round'],
+.taskBadge[data-badge='source'] { color: var(--tx-warn); }
+.taskBadge[data-badge='taken'] { color: var(--tx-accent); }
+.taskBadge[data-badge='pass'] { color: var(--tx-ok); }
+.taskBadge[data-badge='needs_revision'],
+.taskBadge[data-badge='reject'] { color: var(--tx-bad); }
+.taskBadge[data-badge='progress'] { color: var(--tx-accent); }
+.taskAssignee {
+  font-size: var(--tx-fs-2xs);
+  color: var(--tx-text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.taskStatus {
+  font-size: var(--tx-fs-2xs);
+  white-space: nowrap;
+  color: var(--tx-text-2);
+}
+.taskRow[data-state='completed'] .taskStatus { color: var(--tx-ok); }
+.taskRow[data-state='failed'] .taskStatus { color: var(--tx-bad); }
+.taskRow[data-state='running'] .taskStatus { color: var(--tx-accent); }
+.taskRow[data-state='blocked'] .taskStatus { color: var(--tx-warn); }
+
+/* ────────────────────────────────────────────────────────────
+   9. 时间线：左轨 + 节点圆点 + 行悬停
+   ──────────────────────────────────────────────────────────── */
+.timeline { margin-top: var(--tx-sp-2); }
+.timelineSummary {
+  cursor: pointer;
+  font-size: var(--tx-fs-2xs);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tx-text-3);
+  user-select: none;
+  transition: color var(--tx-dur-ctl) var(--tx-ease-out);
+}
+.timelineSummary:hover { color: var(--tx-text-2); }
 .timelineBody {
   position: relative;
-  margin-top: 8px;
-  padding-left: 14px;
+  margin-top: var(--tx-sp-2);
+  padding-left: var(--tx-sp-5);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 220px;
+  overflow-y: auto;
 }
 .timelineBody::before {
   content: '';
@@ -1268,43 +846,135 @@
   top: 6px;
   bottom: 6px;
   width: 1px;
-  background: var(--dsw-alias-border-l2, #3c3c3d);
+  background: var(--tx-hairline);
 }
 .timelineRow {
   position: relative;
+  display: flex;
+  gap: var(--tx-sp-2);
+  align-items: baseline;
   padding: 1px 4px;
-  border-radius: 4px;
+  border-radius: var(--tx-r-sm);
+  font-size: var(--tx-fs-2xs);
+  color: var(--tx-text-3);
+  transition: background-color var(--tx-dur-ctl) var(--tx-ease-out);
 }
+.timelineRow:hover { background: var(--tx-surface-hover); }
 .timelineRow::before {
   content: '';
   position: absolute;
-  left: -14px;
+  left: calc(-1 * var(--tx-sp-5) + 3px);
   top: 50%;
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   transform: translateY(-50%);
   border-radius: 999px;
-  background: var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.2));
-  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
+  background: var(--tx-surface-hover);
+  border: 1px solid var(--tx-hairline);
 }
-.timelineRow:hover {
-  background: var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.06));
+.timelineTime {
+  flex-shrink: 0;
+  font-family: var(--tx-mono);
+  font-variant-numeric: tabular-nums;
+}
+.timelineActor { flex-shrink: 0; color: var(--tx-text-1); }
+.timelineAction { flex-shrink: 0; font-weight: 500; color: var(--tx-text-2); }
+.timelineDetail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-/* Team card: one hairline, softer container radius, quieter shadow. */
-.teamCard {
-  border-radius: 10px;
+/* ────────────────────────────────────────────────────────────
+   10. 收件箱
+   ──────────────────────────────────────────────────────────── */
+.inbox {
+  border-top: 1px solid var(--tx-hairline);
+  padding-top: var(--tx-sp-3);
+}
+.inboxTitle {
+  margin: 0 0 var(--tx-sp-2);
+  font-size: var(--tx-fs-2xs);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--tx-text-3);
+}
+.inboxEmpty { margin: 0; font-size: var(--tx-fs-2xs); color: var(--tx-text-3); }
+.inboxList { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--tx-sp-1); }
+.inboxItem {
+  display: flex;
+  gap: var(--tx-sp-3);
+  font-size: var(--tx-fs-2xs);
+  padding: var(--tx-sp-1) var(--tx-sp-2);
+  border-radius: var(--tx-r-sm);
+  transition: background-color var(--tx-dur-ctl) var(--tx-ease-out);
+}
+.inboxItem:hover { background: var(--tx-surface-hover); }
+.inboxFrom {
+  flex-shrink: 0;
+  font-weight: 500;
+  color: var(--tx-text-2);
+}
+.inboxContent {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--tx-text-3);
 }
 
-/* Reduced motion: the panel must go still on request. */
+/* ────────────────────────────────────────────────────────────
+   11. 侧栏页签（right-sidebar 宿主）
+   ──────────────────────────────────────────────────────────── */
+.tabTitleIcon { display: inline-flex; vertical-align: -2px; }
+.tabTitleLabel { margin-left: 4px; }
+
+/* ────────────────────────────────────────────────────────────
+   12. 动效原语（Emil: transform/opacity only；entry ease-out；
+       屏上 morph ease-in-out；reduced-motion 全静默）
+   ──────────────────────────────────────────────────────────── */
+.animPulse { animation: teamsx-pulse 1.6s var(--tx-ease-inout) infinite; }
+@keyframes teamsx-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.55; transform: scale(0.92); }
+}
+.animSend { animation: teamsx-send var(--tx-dur-ui) var(--tx-ease-out); }
+@keyframes teamsx-send {
+  0%, 100% { transform: translateX(0); opacity: 0.7; }
+  50% { transform: translateX(2px); opacity: 1; }
+}
+.animCelebrate { animation: teamsx-celebrate 600ms var(--tx-ease-inout); }
+@keyframes teamsx-celebrate {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  25% { transform: scale(1.08) rotate(-3deg); }
+  75% { transform: scale(1.08) rotate(3deg); }
+}
+.animThink { animation: teamsx-think 1.8s var(--tx-ease-inout) infinite; }
+@keyframes teamsx-think {
+  0%, 100% { transform: rotate(0deg); opacity: 0.8; }
+  50% { transform: rotate(8deg); opacity: 1; }
+}
+.animSpin { animation: teamsx-spin 0.9s linear infinite; }
+@keyframes teamsx-spin {
+  to { transform: rotate(360deg); }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .taskRow,
-  .taskLaneSegment {
+  .taskLaneSegment,
+  .badgeFabBusy,
+  .skeletonRow,
+  .animPulse,
+  .animSend,
+  .animCelebrate,
+  .animThink,
+  .animSpin {
     animation: none !important;
   }
-  .skeletonRow {
-    animation: none !important;
-  }
+  .panelWindow,
+  .panelSheet,
+  .taskRow,
+  .memberRow,
   .planApprove,
   .planChat,
   .planDiscard,
@@ -1316,7 +986,8 @@
   .modeOption,
   .refreshButton,
   .memberPause,
-  .memberLink {
+  .memberLink,
+  .memberProgressFill {
     transition: none !important;
   }
   .planApprove:active,
@@ -1333,4 +1004,29 @@
   .memberLink:active {
     transform: none !important;
   }
+}
+
+/* 焦点可见环：键盘导航必需（accessibility, not optional） */
+.badgeFab:focus-visible,
+.planApprove:focus-visible,
+.planChat:focus-visible,
+.planDiscard:focus-visible,
+.planDiscardArm:focus-visible,
+.planCancel:focus-visible,
+.stopButton:focus-visible,
+.stopConfirm:focus-visible,
+.stopCancel:focus-visible,
+.modeOption:focus-visible,
+.refreshButton:focus-visible,
+.memberLink:focus-visible,
+.memberPause:focus-visible,
+.planEditorToggle:focus-visible,
+.planEditorAdd:focus-visible,
+.planEditorRemove:focus-visible,
+.planEditorInput:focus-visible,
+.planEditorSubject:focus-visible,
+.planEditorName:focus-visible,
+.timelineSummary:focus-visible {
+  outline: 2px solid var(--tx-accent);
+  outline-offset: 1px;
 }
