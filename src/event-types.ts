@@ -21,6 +21,7 @@ export type TeamsXEventType =
   | 'teamsx/task-created'
   | 'teamsx/task-updated'
   | 'teamsx/message-sent'
+  | 'teamsx/task-progress'
 
 /** Payload shapes for the TeamsX session events. */
 export interface TeamsXEventMap {
@@ -35,6 +36,7 @@ export interface TeamsXEventMap {
   'teamsx/task-created': { teamId: string; taskId: string; subject: string; dependencies: string[]; assignee?: string; kind?: string; round?: number }
   'teamsx/task-updated': { teamId: string; taskId: string; status: string; assignee?: string; output?: string; verdict?: string; round?: number; takenOverBy?: 'captain' }
   'teamsx/message-sent': { teamId: string; messageId: string; from: string; to: string; content: string; ts: number }
+  'teamsx/task-progress': { teamId: string; taskId: string; text: string }
 }
 
 declare module '@deepseek-ai/dsh-session/types' {
@@ -50,5 +52,6 @@ declare module '@deepseek-ai/dsh-session/types' {
     'teamsx/task-created': TeamsXEventMap['teamsx/task-created']
     'teamsx/task-updated': TeamsXEventMap['teamsx/task-updated']
     'teamsx/message-sent': TeamsXEventMap['teamsx/message-sent']
+    'teamsx/task-progress': TeamsXEventMap['teamsx/task-progress']
   }
 }

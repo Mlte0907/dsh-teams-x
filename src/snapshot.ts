@@ -160,6 +160,14 @@ export async function assembleTeamSnapshot(
       elapsedMs: Math.max(0, (TERMINAL_TASK_STATUSES.includes(task.status)
         ? task.updatedAt
         : Date.now()) - task.createdAt),
+      ...(() => {
+        const log = task.progressLog
+        if (log === undefined || log.length === 0) return {}
+        return {
+          progressLatest: log[log.length - 1]?.text,
+          progressCount: log.length,
+        }
+      })(),
     })),
     messageCount: captainInbox.length
       + members.reduce((count, member) => count + member.unread, 0),

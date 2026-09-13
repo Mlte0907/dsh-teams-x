@@ -45,6 +45,42 @@ const INDEX_FILE = 'index.json'
 /** A crashed live-delivery attempt becomes retryable after this interval. */
 const MAILBOX_DELIVERY_LEASE_MS = 60_000
 
+/** Outputs above this size spill to an artifact file; team.json keeps a preview. */
+export const ARTIFACT_SPILL_CHARS = 8_000
+/** Preview length kept in team.json when an output spills. */
+export const ARTIFACT_PREVIEW_CHARS = 2_000
+/** Progress notes retained per task (oldest dropped beyond this). */
+export const PROGRESS_LOG_MAX = 20
+
+/**
+ * Persist an oversized output as `<teamDir>/artifacts/<task>-a<attempt>.txt`
+ * and return the preview + artifact reference for team.json. Small outputs
+ * pass through unchanged.
+ */
+export async function writeTaskArtifact(
+  stateRoot: string,
+  teamId: string,
+  task: Pick<TeamTask, 'id' | 'attempt'>,
+  output: string,
+): Promise<{ output: string; artifact?: { file: string; bytes: number } }> {
+  if (output.length <= ARTIFACT_SPILL_CHARS) return { output }
+  const dir = join(stateRoot, teamId, 'artifacts')
+  await mkdir(dir, { recursive: true })
+  const file = `${task.id}-a${task.attempt ?? 0}.txt`
+  await writeFile(join(dir, file), output, 'utf8')
+  const preview = `${output.slice(0, ARTIFACT_PREVIEW_CHARS)}\n[完整输出 ${output.length} 字已存为工件 artifacts/${file}]`
+  return { output: preview, artifact: { file: `artifacts/${file}`, bytes: output.length } }
+}
+
+/** Append one progress note to an open attempt, dropping the oldest beyond the cap. */
+export function appendTaskProgress(task: TeamTask, text: string): void {
+  const entry = { at: Date.now(), text }
+  const log = task.progressLog
+  const next = log === undefined ? [entry] : [...log, entry]
+  task.progressLog = next.length > PROGRESS_LOG_MAX ? next.slice(next.length - PROGRESS_LOG_MAX) : next
+  task.updatedAt = Date.now()
+}
+
 /** In-process per-team mutation queues (promise chains). */
 const locks = new Map<string, Promise<unknown>>()
 
@@ -1119,6 +1155,7 @@ export async function acknowledgeMailbox(
 
 /** Activate the task's current generation for one owner and return its capability id. */
 export function activateTaskAttempt(task: TeamTask, assignee: string): string {
+  task.attemptStartedAt = Date.now()
   const attemptId = randomUUID()
   task.status = 'claimed'
   task.assignee = assignee
@@ -1153,6 +1190,7 @@ export function cancelUnfinishedTask(task: TeamTask, output?: string): void {
  */
 export function invalidateTaskAttempt(task: TeamTask, nextAssignee?: string, reassigning = false): void {
   task.attemptId = undefined
+  task.attemptStartedAt = undefined
   task.handoffId = randomUUID()
   task.status = 'pending'
   task.assignee = nextAssignee

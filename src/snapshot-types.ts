@@ -76,6 +76,10 @@ export interface TeamActivityTask {
   readonly takenOverBy?: 'captain'
   /** Wall-clock task age in ms: createdAt → updatedAt when terminal, → now while open. */
   readonly elapsedMs?: number
+  /** Latest progress note on the open attempt (long-task heartbeat). */
+  readonly progressLatest?: string
+  /** Total progress notes recorded for this task. */
+  readonly progressCount?: number
 }
 
 /** One captain-inbox preview row. */

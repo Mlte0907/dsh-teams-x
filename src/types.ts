@@ -69,6 +69,12 @@ export interface CommandResult {
 }
 
 /** One task of a team's task list. */
+/** One progress note on an open task attempt. */
+export interface TaskProgressEntry {
+  readonly at: number
+  readonly text: string
+}
+
 export interface TeamTask {
   id: string
   subject: string
@@ -83,6 +89,15 @@ export interface TeamTask {
    * the flag is released on the captain's idle edge or explicit reassign.
    */
   takenOverBy?: 'captain'
+  /** One progress note appended by the worker during an open attempt. */
+  progressLog?: readonly TaskProgressEntry[]
+  /**
+   * Large terminal outputs spill to `<teamDir>/artifacts/<file>`; `output`
+   * keeps a preview and this reference points at the full text.
+   */
+  artifact?: { readonly file: string; readonly bytes: number }
+  /** Wall-clock start of the current attempt; cleared when the attempt is invalidated. */
+  attemptStartedAt?: number
   /** Task ids that must reach `completed` before this task can be claimed. */
   dependencies: string[]
   /** The worker's written result, set when the task completes or fails. */

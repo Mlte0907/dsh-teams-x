@@ -382,6 +382,11 @@ function TaskRow({ task, t }: { task: TeamActivitySnapshot['tasks'][number]; t: 
         {typeof task.elapsedMs === 'number' && (
           <span className={css.taskBadge} data-badge="elapsed" title="任务耗时">{formatElapsed(task.elapsedMs)}</span>
         )}
+        {typeof task.progressCount === 'number' && task.progressCount > 0 && (
+          <span className={css.taskBadge} data-badge="progress" title={task.progressLatest ?? ''}>
+            💬{task.progressCount}
+          </span>
+        )}
       </span>
       <span className={css.taskAssignee}>{assignee}</span>
       <span className={css.taskStatus} title={t(visualKey)}>{t(statusKey)}</span>

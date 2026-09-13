@@ -19,7 +19,9 @@ import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { drainChildren } from './compat.ts'
 import {
+  appendTaskProgress,
   appendTeamOperation,
+  writeTaskArtifact,
   acknowledgeMailbox,
   appendMailbox,
   archiveTeamDir,
@@ -1575,7 +1577,8 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
         enum: ['in_progress', 'completed', 'failed', 'cancelled'],
         description: 'New status.',
       },
-      output: { type: 'string', description: 'Result summary; set when completing or failing.' },
+      output: { type: 'string', description: 'Result summary; set when completing or failing. Outputs above 8000 chars are stored as an artifact file automatically (team.json keeps a preview).' },
+      progress: { type: 'string', description: 'Progress note for a long-running attempt WITHOUT changing status. Appended to the task progress log (cap 20); visible on the panel.' },
       attempt_id: { type: 'string', description: 'Current execution capability returned by claim_task (required for members when present on the task).' },
       verdict: {
         type: 'string',
@@ -1686,6 +1689,28 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
             throw new Error(`stale attempt for task ${task.id}: expected the current attempt_id; stop work and request fresh assignment`)
           }
         }
+        if (args.progress !== undefined) {
+          if (TERMINAL_TASK_STATUSES.includes(task.status)) {
+            throw new Error(`task ${task.id} is terminal; progress notes apply to open attempts`)
+          }
+          appendTaskProgress(task, args.progress)
+          await writeTeam(stateRoot, fresh)
+          appendTeamEvent(ctx, captainSessionOf(ctx, fresh.captainSessionId, caller.session), 'teamsx/task-progress', {
+            teamId: fresh.id, taskId: task.id, text: args.progress,
+          })
+          void appendTeamOperation(stateRoot, team.id, {
+            actor: identity.kind === 'captain' ? 'captain' : identity.name,
+            action: 'task-progress', taskId: task.id, detail: args.progress.slice(0, 200),
+          })
+          return {
+            task_id: task.id,
+            taskKind: taskKindOf(task),
+            ...(task.verdict === undefined ? {} : { taskVerdict: task.verdict }),
+            status: task.status,
+            attempt: task.attempt ?? 0,
+            ...task.attemptId === undefined ? {} : { attempt_id: task.attemptId },
+          }
+        }
         if (TERMINAL_TASK_STATUSES.includes(task.status)) {
           const sameStatus = args.status === undefined || args.status === task.status
           const sameOutput = args.output === undefined || args.output === task.output
@@ -1728,7 +1753,11 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
         }
         // 终结态清空影子标记：接管语义只对进行中的工作有意义
         if (TERMINAL_TASK_STATUSES.includes(task.status)) task.takenOverBy = undefined
-        if (args.output !== undefined) task.output = args.output
+        if (args.output !== undefined) {
+          const spilled = await writeTaskArtifact(stateRoot, team.id, task, args.output)
+          task.output = spilled.output
+          if (spilled.artifact !== undefined) task.artifact = spilled.artifact
+        }
         if (args.verdict !== undefined) task.verdict = args.verdict as ReviewVerdict
         if (findings !== undefined) task.findings = findings
         if (changedPaths !== undefined) task.changedPaths = changedPaths

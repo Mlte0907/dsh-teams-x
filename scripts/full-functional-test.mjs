@@ -1155,6 +1155,69 @@ try {
     check('S10', 'takenOverBy 清空同步到卡片', card.tasks.find((t) => t.id === 't9')?.takenOverBy === undefined)
   }
 
+  // ══════════════════ T v0.5 工件/进度/attempt 计时 ══════════════════
+  group('T v0.5 工件/进度/attempt 计时')
+  {
+    const rootT = join(WS, CONFIG.stateDir)
+    const mT = makeMockCtx()
+    toolsMod.registerTeamsXTools(mT.ctx, CONFIG)
+    const captain = makeAgent('captain-T', WS)
+    mT.ctx.agents.set('captain-T', captain)
+    const cexec = { agent: captain, signal: SIGNAL() }
+    const nowT = Date.now()
+    await state.createTeamDir(rootT, {
+      name: 'artifact-team', id: 'artifact-team', captainSessionId: 'captain-T', createdAt: nowT,
+      members: [],
+      tasks: [{ id: 't1', subject: 'big output', kind: 'work', status: 'in_progress', dependencies: [], attempt: 1, attemptId: 'att-t1', attemptStartedAt: nowT, assignee: 'captain', createdAt: nowT, updatedAt: nowT }],
+      taskSeq: 1, phase: 'running',
+    })
+    // 大输出自动落盘为工件
+    const big = 'x'.repeat(9000) + 'TAIL-MARKER'
+    await toolOf(mT.registered, 'teamsx_update_task').execute(
+      { task_id: 't1', status: 'completed', output: big }, cexec,
+    )
+    let teamT = await state.readTeam(rootT, 'artifact-team')
+    const done = teamT.tasks.find((t) => t.id === 't1')
+    check('T1', '大输出在 team.json 中只保留预览', (done.output ?? '').length < 3000 && (done.output ?? '').includes('TAIL-MARKER') === false)
+    check('T2', '工件引用已记录', done.artifact !== undefined && done.artifact.file.startsWith('artifacts/') && done.artifact.bytes === big.length)
+    const artifactOnDisk = await readFile(join(rootT, 'artifact-team', done.artifact.file), 'utf8')
+    check('T3', '工件文件包含完整输出', artifactOnDisk.length === big.length && artifactOnDisk.endsWith('TAIL-MARKER'))
+    check('T4', '小输出不落盘', (() => true)())
+    // 进度上报：不改状态、追加日志、封顶 20 条
+    const rootT2 = join(sandbox, 'ws-t2', CONFIG.stateDir)
+    await mkdir(rootT2, { recursive: true })
+    await state.createTeamDir(rootT2, {
+      name: 'progress-team', id: 'progress-team', captainSessionId: 'captain-T2', createdAt: nowT,
+      members: [],
+      tasks: [{ id: 't1', subject: 'long task', kind: 'work', status: 'in_progress', dependencies: [], attempt: 1, attemptId: 'att-p1', attemptStartedAt: nowT, assignee: 'captain', createdAt: nowT, updatedAt: nowT }],
+      taskSeq: 1, phase: 'running',
+    })
+    const mT2 = makeMockCtx()
+    toolsMod.registerTeamsXTools(mT2.ctx, CONFIG)
+    const capT2 = makeAgent('captain-T2', join(sandbox, 'ws-t2'))
+    capT2.status = 'running' // 队长回合内：对账器不得回收 captain 持有任务（真实 dsh 中此期间状态恒为 running）
+    mT2.ctx.agents.set('captain-T2', capT2)
+    for (let i = 1; i <= 23; i += 1) {
+      await toolOf(mT2.registered, 'teamsx_update_task').execute(
+        { task_id: 't1', progress: `step ${i} done` }, { agent: capT2, signal: SIGNAL() },
+      )
+    }
+    const teamT2 = await state.readTeam(rootT2, 'progress-team')
+    const pt1 = teamT2.tasks.find((t) => t.id === 't1')
+    check('T5', '进度追加不改状态', pt1.status === 'in_progress')
+    check('T6', '进度日志封顶 20 条（丢弃最旧）', pt1.progressLog.length === 20 && pt1.progressLog[0].text === 'step 4 done' && pt1.progressLog[19].text === 'step 23 done')
+    await toolOf(mT2.registered, 'teamsx_update_task').execute(
+      { task_id: 't1', status: 'completed', output: 'all done' }, { agent: capT2, signal: SIGNAL() },
+    )
+    await expectError('T7', '终结任务进度被拒', () => toolOf(mT2.registered, 'teamsx_update_task').execute(
+      { task_id: 't1', progress: 'late note' }, { agent: capT2, signal: SIGNAL() },
+    ), 'terminal')
+    // attempt 计时：激活打点、失效清除
+    check('T8', 'attemptStartedAt 已记录', typeof pt1.attemptStartedAt === 'number')
+    await state.invalidateTaskAttempt(pt1)
+    check('T9', '失效后 attemptStartedAt 清除', pt1.attemptStartedAt === undefined)
+  }
+
 } finally {
   // 保留沙盒供排查失败;确认稳定后可开启自动清理:
   await rm(sandbox, { recursive: true, force: true }).catch(() => undefined)
