@@ -13,6 +13,8 @@
 .panel,
 .panelWindow,
 .panelSheet {
+  /* 基准字号：任务列表等全部组件继承此档，不再吃宿主 16px */
+  font-size: var(--tx-fs-sm);
   /* 文本 */
   --tx-text-1: var(--dsw-alias-label-primary, #e6e8ec);
   --tx-text-2: var(--dsw-alias-label-secondary, #a8adb4);
@@ -66,7 +68,12 @@
    ──────────────────────────────────────────────────────────── */
 .panel {
   position: relative;
-  display: inline-flex;
+  /* 侧栏宿主容器：必须纵向排布子节（header/错误/空态/团队卡）。
+     v0.8 曾误写 inline-flex，子节点横排成两个半栏（移动端错位根因）。 */
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-width: 0;
 }
 
 .badgeFab {
@@ -167,9 +174,10 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--tx-sp-3);
-  padding: 0 0 var(--tx-sp-4);
+  padding: 0 0 var(--tx-sp-3);
   border-bottom: 1px solid var(--tx-hairline);
-  margin-bottom: var(--tx-sp-4);
+  margin-bottom: var(--tx-sp-3);
+  font-size: var(--tx-fs-sm);
 }
 .panelTitle {
   display: inline-flex;
@@ -238,8 +246,9 @@
   flex-direction: column;
   align-items: center;
   gap: var(--tx-sp-3);
-  padding: var(--tx-sp-6) var(--tx-sp-4);
+  padding: var(--tx-sp-5) var(--tx-sp-4);
   color: var(--tx-text-3);
+  font-size: var(--tx-fs-sm);
 }
 .emptyLogo { opacity: 0.4; }
 .panelEmpty { margin: 0; font-size: var(--tx-fs-xs); text-align: center; }
@@ -284,7 +293,8 @@
   padding: var(--tx-sp-4);
   display: flex;
   flex-direction: column;
-  gap: var(--tx-sp-4);
+  gap: var(--tx-sp-3);
+  font-size: var(--tx-fs-sm);
 }
 .teamCard[data-halted] { opacity: 0.62; }
 
@@ -306,9 +316,11 @@
   letter-spacing: -0.01em;
   line-height: 1.25;
   color: var(--tx-text-1);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  word-break: break-word;
 }
 .teamGoal {
   margin: 2px 0 0;
@@ -565,13 +577,31 @@
   flex-direction: column;
 }
 .memberRow {
-  display: grid;
-  grid-template-columns: 22px minmax(72px, 1.2fr) minmax(0, 1.6fr) auto auto minmax(96px, auto);
-  align-items: center;
+  display: flex;
+  align-items: flex-start;
   gap: var(--tx-sp-3);
-  padding: var(--tx-sp-2) var(--tx-sp-2);
+  padding: var(--tx-sp-2);
   border-radius: var(--tx-r-md);
   transition: background-color var(--tx-dur-ctl) var(--tx-ease-out);
+}
+.memberMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.memberTop {
+  display: flex;
+  align-items: center;
+  gap: var(--tx-sp-2);
+  min-width: 0;
+}
+.memberSub {
+  display: flex;
+  align-items: center;
+  gap: var(--tx-sp-4);
+  min-width: 0;
 }
 .memberRow:hover { background: var(--tx-surface-hover); }
 .memberRow[data-activity='working'] {
@@ -583,6 +613,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  flex: 1;
+  min-width: 0;
 }
 .memberLink {
   border: none;
@@ -607,6 +639,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
 }
 .memberTokens { font-family: var(--tx-mono); font-variant-numeric: tabular-nums; }
 .memberProgress {
@@ -653,6 +686,8 @@
   gap: 4px;
   font-size: var(--tx-fs-2xs);
   color: var(--tx-text-2);
+  flex-shrink: 0;
+  margin-left: auto;
 }
 .memberPause {
   border: none;
@@ -761,11 +796,21 @@
   letter-spacing: 0.02em;
 }
 .taskSubject {
+  min-width: 0;
+  font-weight: 500;
+  color: var(--tx-text-1);
+}
+.taskSubjectText {
+  display: block;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-weight: 500;
-  color: var(--tx-text-1);
+}
+.taskBadgeRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
 }
 .taskDepList { display: inline-flex; gap: 3px; margin-left: var(--tx-sp-3); }
 .taskDepTag {

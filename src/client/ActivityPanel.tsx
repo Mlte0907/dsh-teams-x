@@ -281,46 +281,29 @@ function MemberRow({ member, team, t, openMember, readOnly }: {
           ? <RoleIcon size={18} decorative />
           : <TeamsXLogo size={18} label={member.name} />}
       </span>
-      <span className={css.memberName} title={member.name}>
-        {openable ? (
-          <button
-            type='button'
-            className={css.memberLink}
-            onClick={() => { openMember(team.captainSessionId, member.id) }}
-            title={t('member.openSession')}
-          >
-            {member.name}
-          </button>
-        ) : member.name}
-      </span>
-      <span className={css.memberMeta}>
-        {pauseError ?? member.model}
-        {member.usage !== undefined && (
-          <span className={css.memberTokens} title="累计 token（token-meter）">
-            {` · ↑${formatTokens(member.usage.inputTokens)} ↓${formatTokens(member.usage.outputTokens)}`}
+      <div className={css.memberMain}>
+        <div className={css.memberTop}>
+          <span className={css.memberName} title={member.name}>
+            {openable ? (
+              <button
+                type='button'
+                className={css.memberLink}
+                onClick={() => { openMember(team.captainSessionId, member.id) }}
+                title={t('member.openSession')}
+              >
+                {member.name}
+              </button>
+            ) : member.name}
           </span>
-        )}
-      </span>
-      <span className={css.memberProgress} title={t('member.progress', { done: member.done, total: member.total })}>
-        <span className={css.memberProgressBar} aria-hidden>
-          <span
-            className={css.memberProgressFill}
-            style={{ width: `${member.progress}%` }}
-            data-active={member.progress > 0 && member.progress < 100 || undefined}
-            data-done={member.progress >= 100 || undefined}
-          />
-        </span>
-        {t('member.progress', { done: member.done, total: member.total })}
-      </span>
-      {member.unread > 0 && (
-        <span className={css.memberUnread} title={t('member.unread', { count: member.unread })}>{member.unread}</span>
-      )}
-      <span className={css.memberState}>
-        {ActivityIcon !== undefined && <ActivityIcon size={14} className={
-          member.activity === 'working' ? css.animPulse
-            : member.activity === 'idle' ? css.animThink
-              : undefined
-        } decorative />}
+          {member.unread > 0 && (
+            <span className={css.memberUnread} title={t('member.unread', { count: member.unread })}>{member.unread}</span>
+          )}
+          <span className={css.memberState}>
+            {ActivityIcon !== undefined && <ActivityIcon size={14} className={
+              member.activity === 'working' ? css.animPulse
+                : member.activity === 'idle' ? css.animThink
+                  : undefined
+            } decorative />}
         {t(stateKey)}
         {!readOnly && member.activity === 'working' && (
           <button
@@ -334,7 +317,30 @@ function MemberRow({ member, team, t, openMember, readOnly }: {
             {pausing ? '…' : <GlyphPause size={11} decorative />}
           </button>
         )}
-      </span>
+          </span>
+        </div>
+        <div className={css.memberSub}>
+          <span className={css.memberMeta}>
+            {pauseError ?? member.model}
+            {member.usage !== undefined && (
+              <span className={css.memberTokens} title="累计 token（token-meter）">
+                {` · ↑${formatTokens(member.usage.inputTokens)} ↓${formatTokens(member.usage.outputTokens)}`}
+              </span>
+            )}
+          </span>
+          <span className={css.memberProgress} title={t('member.progress', { done: member.done, total: member.total })}>
+            <span className={css.memberProgressBar} aria-hidden>
+              <span
+                className={css.memberProgressFill}
+                style={{ width: `${member.progress}%` }}
+                data-active={member.progress > 0 && member.progress < 100 || undefined}
+                data-done={member.progress >= 100 || undefined}
+              />
+            </span>
+            {t('member.progress', { done: member.done, total: member.total })}
+          </span>
+        </div>
+      </div>
     </div>
   )
 }
@@ -375,37 +381,39 @@ function TaskRow({ task, t }: { task: TeamActivitySnapshot['tasks'][number]; t: 
       <span className={css.taskIcon}>{StateIcon !== undefined && <StateIcon size={14} className={task.state === 'running' ? css.animPulse : undefined} decorative />}</span>
       <span className={css.taskId}>{task.id}</span>
       <span className={css.taskSubject} title={task.description || task.subject}>
-        {task.subject}
-        {task.dependencies.length > 0 && (
-          <span className={css.taskDepList}>
-            {task.dependencies.map((dep) => (
-              <span key={dep} className={css.taskDepTag}>{dep}</span>
-            ))}
-          </span>
-        )}
-        {task.round !== undefined && task.round > 0 && (
-          <span className={css.taskBadge} data-badge="round" title={`第 ${task.round} 轮修复`}>R{task.round}</span>
-        )}
-        {task.kind === 'repair' && task.dependencies.length > 0 && (
-          <span className={css.taskBadge} data-badge="source" title={`修复自 ${task.dependencies[0]}`}>↻ {task.dependencies[0]}</span>
-        )}
-        {task.takenOverBy === 'captain' && (
-          <span className={css.taskBadge} data-badge="taken" title="队长影子接管中：成员保留提交权">队长接管</span>
-        )}
-        {task.verdict !== undefined && (
-          <span className={css.taskBadge} data-badge={task.verdict}>
-            {task.verdict === 'pass' ? 'pass' : task.verdict === 'needs_revision' ? '待修' : '拒绝'}
-          </span>
-        )}
-        {typeof task.elapsedMs === 'number' && (
-          <span className={css.taskBadge} data-badge="elapsed" title="任务耗时">{formatElapsed(task.elapsedMs)}</span>
-        )}
-        {typeof task.progressCount === 'number' && task.progressCount > 0 && (
-          <span className={css.taskBadge} data-badge="progress" title={task.progressLatest ?? ''}>
-            <GlyphProgress size={10} decorative />
-            {task.progressCount}
-          </span>
-        )}
+        <span className={css.taskSubjectText}>{task.subject}</span>
+        <span className={css.taskBadgeRow}>
+          {task.dependencies.length > 0 && (
+            <span className={css.taskDepList}>
+              {task.dependencies.map((dep) => (
+                <span key={dep} className={css.taskDepTag}>{dep}</span>
+              ))}
+            </span>
+          )}
+          {task.round !== undefined && task.round > 0 && (
+            <span className={css.taskBadge} data-badge="round" title={`第 ${task.round} 轮修复`}>R{task.round}</span>
+          )}
+          {task.kind === 'repair' && task.dependencies.length > 0 && (
+            <span className={css.taskBadge} data-badge="source" title={`修复自 ${task.dependencies[0]}`}>↻ {task.dependencies[0]}</span>
+          )}
+          {task.takenOverBy === 'captain' && (
+            <span className={css.taskBadge} data-badge="taken" title="队长影子接管中：成员保留提交权">队长接管</span>
+          )}
+          {task.verdict !== undefined && (
+            <span className={css.taskBadge} data-badge={task.verdict}>
+              {task.verdict === 'pass' ? 'pass' : task.verdict === 'needs_revision' ? '待修' : '拒绝'}
+            </span>
+          )}
+          {typeof task.elapsedMs === 'number' && (
+            <span className={css.taskBadge} data-badge="elapsed" title="任务耗时">{formatElapsed(task.elapsedMs)}</span>
+          )}
+          {typeof task.progressCount === 'number' && task.progressCount > 0 && (
+            <span className={css.taskBadge} data-badge="progress" title={task.progressLatest ?? ''}>
+              <GlyphProgress size={10} decorative />
+              {task.progressCount}
+            </span>
+          )}
+        </span>
       </span>
       <span className={css.taskAssignee}>{assignee}</span>
       <span className={css.taskStatus} title={t(visualKey)}>{t(statusKey)}</span>
@@ -529,17 +537,8 @@ function TeamCard({ team, t, openMember, readOnly, onSaved }: {
       <header className={css.teamHeader}>
         <TeamsXLogo size={20} className={css.teamLogo} decorative />
         <div className={css.teamTitleBlock}>
-          <h3 className={css.teamName}>{team.name}</h3>
+          <h3 className={css.teamName} title={team.name}>{team.name}</h3>
           {team.description !== undefined && <p className={css.teamGoal}>{team.description}</p>}
-        </div>
-        <div className={css.teamBadges}>
-          <span className={css.badge}>{t(team.phase === 'staged' ? 'team.phase.staged' : 'team.phase.running')}</span>
-          {team.planReviewState !== undefined && (
-            <span className={css.badgeMuted}>{t(`team.planReview.${team.planReviewState}` as TeamsXLocaleKey)}</span>
-          )}
-          {team.halted === true && <span className={css.badgeWarn}>{t('team.halted')}</span>}
-          <span className={css.badgeMuted}>{t('team.members', { count: team.members.length })}</span>
-          <span className={css.badgeMuted}>{t('team.done', { done, total: team.tasks.length })}</span>
         </div>
         {!readOnly && team.phase === 'running' && team.halted !== true && !confirming && (
           <button type='button' className={css.stopButton} onClick={() => { setConfirming(true) }}>
@@ -547,6 +546,15 @@ function TeamCard({ team, t, openMember, readOnly, onSaved }: {
           </button>
         )}
       </header>
+      <div className={css.teamBadges}>
+        <span className={css.badge}>{t(team.phase === 'staged' ? 'team.phase.staged' : 'team.phase.running')}</span>
+        {team.planReviewState !== undefined && (
+          <span className={css.badgeMuted}>{t(`team.planReview.${team.planReviewState}` as TeamsXLocaleKey)}</span>
+        )}
+        {team.halted === true && <span className={css.badgeWarn}>{t('team.halted')}</span>}
+        <span className={css.badgeMuted}>{t('team.members', { count: team.members.length })}</span>
+        <span className={css.badgeMuted}>{t('team.done', { done, total: team.tasks.length })}</span>
+      </div>
 
       {confirming && (
         <div className={css.stopConfirmBox} role='alertdialog' aria-label={t('team.stopTitle', { team: team.name })}>
