@@ -1080,3 +1080,257 @@
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   color: var(--dsw-alias-label-tertiary, #7d828a);
 }
+
+/* ═══════════════════════════════════════════════════════════════
+   v0.7 taste redesign — anti-slop pass (taste-skill audit)
+   Single accent family · pastel wash badges · tabular data · hairline
+   surfaces · hover/press/focus states · composed empty state ·
+   transform-only motion with reduced-motion respect.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Data is numeric: ids, counts, elapsed, timestamps read in tabular figures.
+   Meta columns ride a monospace stack for scan-friendly alignment. */
+.taskId,
+.taskBadge,
+.memberProgress,
+.memberUnread,
+.badge,
+.badgeMuted,
+.badgeWarn,
+.timelineTime {
+  font-variant-numeric: tabular-nums;
+}
+.taskId,
+.timelineTime,
+.memberTokens {
+  font-family: var(--dsw-font-family-mono, ui-monospace, 'SF Mono', 'JetBrains Mono', monospace);
+  font-size: 10.5px;
+}
+
+/* Hierarchy between regular and bold: subjects and team names carry 500/600
+   with tightened tracking; the header stays sentence case. */
+.teamName {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.taskSubject {
+  font-weight: 500;
+}
+.panelTitle {
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+/* Badge system: no borders — a soft wash of the semantic hue behind
+   matching text (color-mix keeps the wash theme-aware in dark mode). */
+.taskBadge {
+  border: none;
+  background: color-mix(in srgb, currentColor 10%, transparent);
+  font-size: 10px;
+  line-height: 15px;
+  padding: 0 6px;
+  color: var(--dsw-alias-label-secondary, #a8adb4);
+}
+.taskBadge[data-badge='round'],
+.taskBadge[data-badge='source'] {
+  color: var(--dsw-alias-state-warn-primary, #f59e0b);
+}
+.taskBadge[data-badge='taken'] {
+  color: var(--dsw-alias-state-business-primary, #679efe);
+}
+.taskBadge[data-badge='pass'] {
+  color: var(--dsw-alias-state-success-primary, #22c55e);
+}
+.taskBadge[data-badge='needs_revision'],
+.taskBadge[data-badge='reject'] {
+  color: var(--dsw-alias-state-error-primary, #f25a5a);
+}
+.taskBadge[data-badge='progress'] {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  color: var(--dsw-alias-state-business-primary, #679efe);
+}
+
+/* Alive but quiet: rows respond to hover; everything presses and focuses. */
+.taskRow,
+.memberRow {
+  transition: background-color 160ms ease, border-color 160ms ease;
+}
+.taskRow:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.08));
+}
+.memberRow:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.06));
+}
+.taskRow:hover .taskSubject {
+  color: var(--dsw-alias-label-primary, inherit);
+}
+.planApprove,
+.planChat,
+.planDiscard,
+.planDiscardArm,
+.planCancel,
+.stopButton,
+.stopConfirm,
+.stopCancel,
+.modeOption,
+.refreshButton,
+.memberLink,
+.memberPause {
+  transition: background-color 160ms ease, color 160ms ease, border-color 160ms ease, transform 120ms ease;
+}
+.planApprove:active,
+.planChat:active,
+.planDiscard:active,
+.planDiscardArm:active,
+.planCancel:active,
+.stopButton:active,
+.stopConfirm:active,
+.stopCancel:active,
+.modeOption:active,
+.refreshButton:active,
+.memberPause:active,
+.memberLink:active {
+  transform: scale(0.98);
+}
+.planApprove:focus-visible,
+.planChat:focus-visible,
+.planDiscard:focus-visible,
+.planDiscardArm:focus-visible,
+.planCancel:focus-visible,
+.stopButton:focus-visible,
+.stopConfirm:focus-visible,
+.stopCancel:focus-visible,
+.modeOption:focus-visible,
+.refreshButton:focus-visible,
+.memberLink:focus-visible,
+.memberPause:focus-visible,
+.taskRow:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary, #679efe);
+  outline-offset: 1px;
+}
+
+/* Staggered row entry: translate + opacity only (GPU-friendly), capped so
+   long lists never feel like a parade. */
+@keyframes teamsx-row-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.taskRow {
+  animation: teamsx-row-in 200ms ease both;
+}
+.taskRow:nth-child(n + 13) {
+  animation: none;
+}
+
+/* Composed empty state while the captain is still decomposing the goal. */
+.dagEmpty {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 10px 10px;
+}
+.dagEmptyText {
+  margin: 0 0 2px;
+  font-size: 11.5px;
+  color: var(--dsw-alias-label-secondary, #a8adb4);
+}
+.skeletonRow {
+  display: block;
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(
+    90deg,
+    var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.10)) 25%,
+    color-mix(in srgb, var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.10)) 40%, transparent) 50%,
+    var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.10)) 75%
+  );
+  background-size: 200% 100%;
+  animation: teamsx-skeleton 1.4s ease-in-out infinite;
+}
+@keyframes teamsx-skeleton {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+
+/* Timeline as an actual timeline: a hairline rail with node dots and
+   tabular timestamps, rows lifting on hover. */
+.timelineBody {
+  position: relative;
+  margin-top: 8px;
+  padding-left: 14px;
+}
+.timelineBody::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: var(--dsw-alias-border-l2, #3c3c3d);
+}
+.timelineRow {
+  position: relative;
+  padding: 1px 4px;
+  border-radius: 4px;
+}
+.timelineRow::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  width: 7px;
+  height: 7px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+  background: var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.2));
+  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
+}
+.timelineRow:hover {
+  background: var(--dsw-alias-interactive-bg-hover, rgba(127, 127, 127, 0.06));
+}
+
+/* Team card: one hairline, softer container radius, quieter shadow. */
+.teamCard {
+  border-radius: 10px;
+}
+
+/* Reduced motion: the panel must go still on request. */
+@media (prefers-reduced-motion: reduce) {
+  .taskRow,
+  .taskLaneSegment {
+    animation: none !important;
+  }
+  .skeletonRow {
+    animation: none !important;
+  }
+  .planApprove,
+  .planChat,
+  .planDiscard,
+  .planDiscardArm,
+  .planCancel,
+  .stopButton,
+  .stopConfirm,
+  .stopCancel,
+  .modeOption,
+  .refreshButton,
+  .memberPause,
+  .memberLink {
+    transition: none !important;
+  }
+  .planApprove:active,
+  .planChat:active,
+  .planDiscard:active,
+  .planDiscardArm:active,
+  .planCancel:active,
+  .stopButton:active,
+  .stopConfirm:active,
+  .stopCancel:active,
+  .modeOption:active,
+  .refreshButton:active,
+  .memberPause:active,
+  .memberLink:active {
+    transform: none !important;
+  }
+}

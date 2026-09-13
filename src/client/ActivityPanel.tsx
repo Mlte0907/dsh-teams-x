@@ -23,6 +23,7 @@ import {
   ACTIVITY_ICONS,
   GlyphClose,
   GlyphPause,
+  GlyphProgress,
   GlyphRefresh,
   ROLE_ICONS,
   VISUAL_STATE_ICONS,
@@ -393,7 +394,7 @@ function TaskRow({ task, t }: { task: TeamActivitySnapshot['tasks'][number]; t: 
         )}
         {task.verdict !== undefined && (
           <span className={css.taskBadge} data-badge={task.verdict}>
-            {task.verdict === 'pass' ? '✓ pass' : task.verdict === 'needs_revision' ? '⚠ 待修' : '✗ 拒绝'}
+            {task.verdict === 'pass' ? 'pass' : task.verdict === 'needs_revision' ? '待修' : '拒绝'}
           </span>
         )}
         {typeof task.elapsedMs === 'number' && (
@@ -401,7 +402,8 @@ function TaskRow({ task, t }: { task: TeamActivitySnapshot['tasks'][number]; t: 
         )}
         {typeof task.progressCount === 'number' && task.progressCount > 0 && (
           <span className={css.taskBadge} data-badge="progress" title={task.progressLatest ?? ''}>
-            💬{task.progressCount}
+            <GlyphProgress size={10} decorative />
+            {task.progressCount}
           </span>
         )}
       </span>
@@ -566,6 +568,14 @@ function TeamCard({ team, t, openMember, readOnly, onSaved }: {
       </div>
 
       <div className={css.dag}>
+        {team.tasks.length === 0 && team.phase === 'running' && (
+          <div className={css.dagEmpty} role='status'>
+            <p className={css.dagEmptyText}>队长正在把目标拆解成任务</p>
+            <span className={css.skeletonRow} style={{ width: '72%' }} aria-hidden />
+            <span className={css.skeletonRow} style={{ width: '54%' }} aria-hidden />
+            <span className={css.skeletonRow} style={{ width: '63%' }} aria-hidden />
+          </div>
+        )}
         {team.tasks.map((task) => <TaskRow key={task.id} task={task} t={t} />)}
         {team.operations.length > 0 && (
           <details className={css.timeline}>

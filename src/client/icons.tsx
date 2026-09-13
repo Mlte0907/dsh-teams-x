@@ -74,6 +74,12 @@ export const GlyphRefresh = makeGlyphIcon(
 /** Two-stroke X, for the panel close control. */
 export const GlyphClose = makeGlyphIcon(`<path d='M18 6 6 18M6 6l12 12'/>`, 'close')
 
+/** Chat bubble with a progress tick, for task progress-note counts. */
+export const GlyphProgress = makeGlyphIcon(
+  `<path d='M21 11.5a8.38 8.38 0 0 1-8.5 8.5 8.5 8.5 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 8.5-8.5 8.38 8.38 0 0 1 8.5 8.5z'/>`,
+  'progress',
+)
+
 /** Two stroke bars, for the per-member pause control. */
 export const GlyphPause = makeGlyphIcon(
   `<rect x='6.5' y='4.5' width='4' height='15' rx='1'/><rect x='13.5' y='4.5' width='4' height='15' rx='1'/>`,
