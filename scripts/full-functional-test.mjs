@@ -573,10 +573,15 @@ try {
     await toolOf(ctxR.registered, 'teamsx_create').execute({ name: 'reassign-team' }, rexec)
     await toolOf(ctxR.registered, 'teamsx_add_member').execute({ name: 'rw' }, rexec)
     const rt = await toolOf(ctxR.registered, 'teamsx_create_task').execute({ subject: 'r-task', assignee: 'rw' }, rexec)
-    await toolOf(ctxR.registered, 'teamsx_claim_task').execute({ task_id: rt.task_id, assignee: 'rw' }, rexec)
+    const claimRw = await toolOf(ctxR.registered, 'teamsx_claim_task').execute({ task_id: rt.task_id, assignee: 'rw' }, rexec)
     await expectError('F19', '重派到不存在成员拒绝', () => toolOf(ctxR.registered, 'teamsx_reassign_task').execute({ task_id: rt.task_id, assignee: 'ghost' }, rexec), 'no active member named "ghost"')
     const re = await toolOf(ctxR.registered, 'teamsx_reassign_task').execute({ task_id: rt.task_id, assignee: 'captain', reason: 'takeover' }, rexec)
-    check('F19b', 'captain 接管 → in_progress + 新 attempt', re.assignee === 'captain' && re.status === 'in_progress' && typeof re.attempt_id === 'string')
+    const teamR = await state.readTeam(ROOT, 'reassign-team')
+    const taskR = teamR.tasks.find((t) => t.id === rt.task_id)
+    check('F19b', 'captain 接管 → 影子模式(assignee 保留/attempt 保留/takenOverBy)',
+      re.assignee === 'rw' && re.attempt_id === claimRw.attempt_id
+      && taskR.takenOverBy === 'captain' && taskR.status === 'claimed',
+      JSON.stringify({ assignee: re.assignee, attempt_id: re.attempt_id, takenOverBy: taskR.takenOverBy, status: taskR.status }))
     await toolOf(ctxR.registered, 'teamsx_delete').execute({}, rexec)
   }
 
@@ -977,6 +982,144 @@ try {
     check('O10', 'message-sent 不改变状态且 update 永不返回 undefined',
       fold('teamsx/message-sent', { teamId: 'alpha' }) === state && state !== undefined && state.tasks.length === 1)
   }
+  // ══════════════════ P 影子接管(v0.3) ══════════════════
+  group('P 影子接管(v0.3: 接管不锁死贡献者)')
+  {
+    const rootP = join(WS, CONFIG.stateDir)
+    const mP = makeMockCtx()
+    toolsMod.registerTeamsXTools(mP.ctx, CONFIG)
+    const captain = makeAgent('captain-shadow', WS)
+    mP.ctx.agents.set('captain-shadow', captain)
+    const cexec = { agent: captain, signal: SIGNAL() }
+    const workerAgent = makeAgent('child-800', WS)
+    workerAgent.status = 'running' // 影子接管打断的是正在工作的成员
+    mP.ctx.agents.set('child-800', workerAgent)
+    const wexec = { agent: workerAgent, signal: SIGNAL() }
+    const nowP = Date.now()
+    await state.createTeamDir(rootP, {
+      name: 'shadow-team', id: 'shadow-team', captainSessionId: 'captain-shadow', createdAt: nowP,
+      members: [{ name: 'worker', id: 'child-800', status: 'working', joinedAt: nowP }],
+      tasks: [{ id: 't1', subject: 'impl feature', kind: 'implementation', status: 'in_progress', dependencies: [], attempt: 1, attemptId: 'att-p1', assignee: 'worker', inScope: ['src/x.ts'], createdAt: nowP, updatedAt: nowP }],
+      taskSeq: 1, phase: 'running',
+    })
+    await toolOf(mP.registered, 'teamsx_reassign_task').execute({ task_id: 't1', assignee: 'captain', reason: 'drive myself' }, cexec)
+    let teamP = await state.readTeam(rootP, 'shadow-team')
+    let t1 = teamP.tasks.find((t) => t.id === 't1')
+    check('P1', '影子接管不改写 assignee', t1.assignee === 'worker', String(t1.assignee))
+    check('P2', '影子接管保留成员 attempt_id', t1.attemptId === 'att-p1', String(t1.attemptId))
+    check('P3', '影子接管打上 takenOverBy 标记', t1.takenOverBy === 'captain', String(t1.takenOverBy))
+    check('P4', '接管后状态保持 in_progress', t1.status === 'in_progress', t1.status)
+    await toolOf(mP.registered, 'teamsx_update_task').execute({ task_id: 't1', output: 'captain driving' }, cexec)
+    check('P5', '队长影子更新放行（旧代码此处抛 owned by member）', true)
+    await toolOf(mP.registered, 'teamsx_update_task').execute({
+      task_id: 't1', status: 'completed', attempt_id: 'att-p1', output: 'member finished',
+      acceptanceResults: [{ criterion: 'works', status: 'passed', evidence: 'e' }],
+      commandsRun: [{ command: 'npm t', status: 'passed', exitCode: 0, evidence: 'ok' }],
+      changedPaths: ['src/x.ts'],
+    }, wexec)
+    teamP = await state.readTeam(rootP, 'shadow-team')
+    t1 = teamP.tasks.find((t) => t.id === 't1')
+    check('P6', '成员在影子期间提交放行（核心修复）', t1.status === 'completed' && t1.output === 'member finished', JSON.stringify({ status: t1.status, output: t1.output }))
+    check('P7', '终结后 takenOverBy 无残留影响', t1.takenOverBy === undefined)
+    const opsP = (await readFile(join(rootP, 'shadow-team', 'operations.jsonl'), 'utf8')).trim().split('\n').map((l) => JSON.parse(l))
+    check('P8', 'operations.jsonl 记录 task-shadow-takeover', opsP.some((o) => o.action === 'task-shadow-takeover'))
+    check('P9', 'operations.jsonl 记录成员 task-updated', opsP.some((o) => o.action === 'task-updated' && o.actor === 'worker'))
+  }
+
+  // ══════════════════ Q 修复回路去重与级联取消(v0.3) ══════════════════
+  group('Q 修复去重与级联取消(v0.3)')
+  {
+    const rootQ = join(WS, CONFIG.stateDir)
+    const mQ = makeMockCtx()
+    toolsMod.registerTeamsXTools(mQ.ctx, CONFIG)
+    const captain = makeAgent('captain-Q', WS)
+    mQ.ctx.agents.set('captain-Q', captain)
+    const cexec = { agent: captain, signal: SIGNAL() }
+    const reviewerAgent = makeAgent('child-900', WS)
+    mQ.ctx.agents.set('child-900', reviewerAgent)
+    const rexec = { agent: reviewerAgent, signal: SIGNAL() }
+    const nowQ = Date.now()
+    await state.createTeamDir(rootQ, {
+      name: 'repair-dedup', id: 'repair-dedup', captainSessionId: 'captain-Q', createdAt: nowQ,
+      members: [{ name: 'reviewer', id: 'child-900', status: 'idle', joinedAt: nowQ }],
+      tasks: [{ id: 't1', subject: 'Review fix', kind: 'review', status: 'in_progress', dependencies: [], attempt: 1, attemptId: 'att-q1', assignee: 'reviewer', createdAt: nowQ, updatedAt: nowQ }],
+      taskSeq: 1, phase: 'running',
+    })
+    await toolOf(mQ.registered, 'teamsx_update_task').execute(
+      { task_id: 't1', status: 'failed', attempt_id: 'att-q1', verdict: 'needs_revision',
+        findings: [{ id: 'f1', severity: 'blocker', problem: 'p1', requiredFix: 'fix1' }], output: 'blocker found' },
+      rexec,
+    )
+    let teamQ = await state.readTeam(rootQ, 'repair-dedup')
+    check('Q1', '失败后自动派生 repair', teamQ.tasks.some((t) => t.kind === 'repair'))
+    await toolOf(mQ.registered, 'teamsx_reassign_task').execute({ task_id: 't1', assignee: 'reviewer', reason: 'retry' }, cexec)
+    const claim2 = await toolOf(mQ.registered, 'teamsx_claim_task').execute({ task_id: 't1' }, rexec)
+    await toolOf(mQ.registered, 'teamsx_update_task').execute(
+      { task_id: 't1', status: 'failed', attempt_id: claim2.attempt_id, verdict: 'needs_revision',
+        findings: [{ id: 'f2', severity: 'blocker', problem: 'p2', requiredFix: 'fix2' }], output: 'still bad' },
+      rexec,
+    )
+    teamQ = await state.readTeam(rootQ, 'repair-dedup')
+    check('Q2', '同源 open repair 已存在时不重复派生', teamQ.tasks.filter((t) => t.kind === 'repair').length === 1, `repair count=${teamQ.tasks.filter((t) => t.kind === 'repair').length}`)
+    // 源任务重试成功：直接置态绕过调度器冷恢复重派与测试 mock 的竞态
+    // （kick 路径的派发行为已由其它测试组覆盖）。
+    teamQ = await state.readTeam(rootQ, 'repair-dedup')
+    const t1q = teamQ.tasks.find((t) => t.id === 't1')
+    t1q.status = 'in_progress'
+    t1q.attempt = 3
+    t1q.attemptId = 'att-q3'
+    await state.writeTeam(rootQ, teamQ)
+    await toolOf(mQ.registered, 'teamsx_update_task').execute(
+      { task_id: 't1', status: 'completed', attempt_id: 'att-q3', verdict: 'pass', output: 'truly fixed',
+        findings: [
+          { id: 'f1', severity: 'blocker', problem: 'p1', requiredFix: 'fix1', resolved: true },
+          { id: 'f2', severity: 'blocker', problem: 'p2', requiredFix: 'fix2', resolved: true },
+        ] },
+      rexec,
+    )
+    teamQ = await state.readTeam(rootQ, 'repair-dedup')
+    const sibling = teamQ.tasks.find((t) => t.kind === 'repair')
+    check('Q3', '源任务 pass 后兄弟 repair 级联取消', sibling !== undefined && sibling.status === 'cancelled', String(sibling?.status))
+    check('Q4', '取消说明写明被取代原因', (sibling?.output ?? '').includes('Superseded'))
+    const opsQ = (await readFile(join(rootQ, 'repair-dedup', 'operations.jsonl'), 'utf8')).trim().split('\n').map((l) => JSON.parse(l))
+    check('Q5', 'operations.jsonl 记录派生与取消', opsQ.some((o) => o.action === 'repair-derived') && opsQ.some((o) => o.action === 'repair-cancelled'))
+  }
+
+  // ══════════════════ R 对账纯函数与锁默认(v0.3) ══════════════════
+  group('R 对账纯函数与锁默认(v0.3)')
+  {
+    const sched = await import(join(root, 'lib', 'scheduler.js'))
+    const mkTask = (id, over = {}) => ({ id, kind: 'repair', dependencies: [], status: 'pending', ...over })
+    check('R1', 'captain 持有且队长不在线 → stranded', sched.isStrandedCaptainTask({ id: 't', assignee: 'captain', status: 'in_progress' }, false) === true)
+    check('R2', '队长正在 running → 不回收', sched.isStrandedCaptainTask({ id: 't', assignee: 'captain', status: 'in_progress' }, true) === false)
+    check('R3', '成员持有 → 不适用', sched.isStrandedCaptainTask({ id: 't', assignee: 'worker', status: 'in_progress' }, false) === false)
+    check('R4', '终结态 → 不适用', sched.isStrandedCaptainTask({ id: 't', assignee: 'captain', status: 'completed' }, false) === false)
+    check('R5', 'openRepairSiblingFor 只取同源 open repair',
+      sched.openRepairSiblingFor([
+        mkTask('a', { dependencies: ['x'] }),
+        mkTask('b', { dependencies: ['x'], status: 'cancelled' }),
+        mkTask('c', { dependencies: ['x'], kind: 'work' }),
+        mkTask('d', { dependencies: ['y'] }),
+      ], 'x')?.id === 'a')
+    check('R6', 'cancelSupersededRepairSiblings 只取消 open 同源兄弟', (() => {
+      const tasks = [
+        mkTask('x', { status: 'completed' }),
+        mkTask('a', { dependencies: ['x'] }),
+        mkTask('b', { dependencies: ['x'], status: 'cancelled' }),
+        mkTask('c', { dependencies: ['y'] }),
+      ]
+      const cancelled = sched.cancelSupersededRepairSiblings(tasks, 'x')
+      return cancelled.length === 1 && cancelled[0].id === 'a' && tasks[1].status === 'cancelled'
+    })())
+    check('R7', '跨进程锁默认开启', state.crossProcessLockEnabled() === true)
+    const prevLock = process.env['DSH_TEAMSX_FILE_LOCK']
+    process.env['DSH_TEAMSX_FILE_LOCK'] = '0'
+    check('R8', 'DSH_TEAMSX_FILE_LOCK=0 可显式关闭', state.crossProcessLockEnabled() === false)
+    if (prevLock === undefined) delete process.env['DSH_TEAMSX_FILE_LOCK']
+    else process.env['DSH_TEAMSX_FILE_LOCK'] = prevLock
+    check('R9', '恢复环境后回默认开启', state.crossProcessLockEnabled() === true)
+  }
+
 } finally {
   // 保留沙盒供排查失败;确认稳定后可开启自动清理:
   await rm(sandbox, { recursive: true, force: true }).catch(() => undefined)

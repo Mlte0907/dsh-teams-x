@@ -76,6 +76,13 @@ export interface TeamTask {
   status: TaskStatus
   /** Member name (or `captain`) the task is assigned to; unassigned tasks await a claim. */
   assignee?: string
+  /**
+   * Shadow takeover marker (v0.3): when the captain takes over a member-owned
+   * task, the assignee stays the member and this flag records the captain's
+   * active drive. The member keeps submit rights and its attempt stays valid;
+   * the flag is released on the captain's idle edge or explicit reassign.
+   */
+  takenOverBy?: 'captain'
   /** Task ids that must reach `completed` before this task can be claimed. */
   dependencies: string[]
   /** The worker's written result, set when the task completes or fails. */

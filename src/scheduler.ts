@@ -19,11 +19,16 @@ import { join } from 'node:path'
 import { deliverToMember } from './members.ts'
 import {
   acknowledgeMailbox,
+  appendMailbox,
+  appendTeamOperation,
   beginTaskAttempt,
+  cancelUnfinishedTask,
   CAPTAIN_KEY,
   claimMailboxDelivery,
+  createMessage,
   findTeamByParticipant,
   invalidateTaskAttempt,
+  listAllTeams,
   readTeam,
   readUnreadMailbox,
   releaseMailboxDelivery,
@@ -31,7 +36,8 @@ import {
   withTeamLock,
   writeTeam,
 } from './state.ts'
-import type { TeamMember, TeamState, TeamTask } from './types.ts'
+import { steerCaptainReport } from './members.ts'
+import { TERMINAL_TASK_STATUSES, type TeamMember, type TeamState, type TeamTask } from './types.ts'
 
 /** Per-dependency output cap in the assignment prompt. */
 export const DEPENDENCY_OUTPUT_MAX_CHARS = 2_000
@@ -96,6 +102,48 @@ export function deriveRepairTask(
     createdAt: now,
     updatedAt: now,
   }
+}
+
+/**
+ * Find an open (non-terminal) repair sibling derived from `sourceTaskId`.
+ * Used to avoid deriving duplicate repair tasks for the same failed source
+ * (2026-09-13 real run: two pending "Repair:" siblings piled up on one task).
+ */
+export function openRepairSiblingFor(tasks: readonly TeamTask[], sourceTaskId: string): TeamTask | undefined {
+  return tasks.find((task) => task.id !== sourceTaskId
+    && task.kind === 'repair'
+    && task.dependencies.includes(sourceTaskId)
+    && !TERMINAL_TASK_STATUSES.includes(task.status))
+}
+
+/**
+ * Cancel every open repair sibling of `sourceTaskId` (in place). Called when
+ * the source task completes successfully — pending repair siblings would
+ * otherwise become ready duplicated work.
+ * @returns the cancelled siblings, for logging/events.
+ */
+export function cancelSupersededRepairSiblings(tasks: readonly TeamTask[], sourceTaskId: string): TeamTask[] {
+  const cancelled: TeamTask[] = []
+  for (const task of tasks) {
+    if (task.id === sourceTaskId || task.kind !== 'repair') continue
+    if (!task.dependencies.includes(sourceTaskId)) continue
+    if (TERMINAL_TASK_STATUSES.includes(task.status)) continue
+    cancelUnfinishedTask(task, `Superseded: source task ${sourceTaskId} completed successfully; this repair task is no longer needed.`)
+    cancelled.push(task)
+  }
+  return cancelled
+}
+
+/**
+ * A captain-owned task is stranded when the captain session can no longer
+ * drive it: the session is gone, or it is not actively running a turn.
+ * Such tasks have no event edge left to recover them (the scheduler is purely
+ * event-driven), so the reconciler returns them to the shared pool.
+ */
+export function isStrandedCaptainTask(task: TeamTask, captainRunning: boolean): boolean {
+  return task.assignee === CAPTAIN_KEY
+    && !TERMINAL_TASK_STATUSES.includes(task.status)
+    && !captainRunning
 }
 
 export interface TeamScheduler {
@@ -329,9 +377,58 @@ export function installTeamScheduler(ctx: Context, config: SchedulerConfig): Tea
     }
   }
 
+  // Workspace state roots seen by any scheduler entry point; the periodic
+  // reconciler sweeps them so a captain session that died without an idle
+  // edge cannot strand its takeover tasks forever.
+  const seenWorkspaces = new Set<string>()
+  const trackRoot = (workspace: string): string => {
+    seenWorkspaces.add(workspace)
+    return stateRootOf(workspace, config)
+  }
+
+  const reconcileStrandedCaptainTasks = async (workspace: string, teamId: string): Promise<void> => {
+    const stateRoot = trackRoot(workspace)
+    await withTeamLock(teamLockKey(stateRoot, teamId), async () => {
+      const team = await readTeam(stateRoot, teamId)
+      if (team === undefined || team.halted === true || team.phase === 'staged') return
+      const live = liveCaptain(ctx, team.captainSessionId)
+      const captainRunning = live !== undefined && live.status === 'running'
+      let changed = false
+      for (const task of team.tasks) {
+        if (!isStrandedCaptainTask(task, captainRunning)) continue
+        invalidateTaskAttempt(task)
+        task.reassigning = false
+        changed = true
+        void appendTeamOperation(stateRoot, teamId, {
+          actor: 'scheduler', action: 'stranded-captain-task-requeued',
+          taskId: task.id, from: 'captain', to: undefined,
+          detail: 'captain session cannot drive this task; returned to the shared pool',
+        })
+      }
+      if (changed) await writeTeam(stateRoot, team)
+    })
+  }
+
+  const reconcileSeenRoots = async (): Promise<void> => {
+    for (const workspace of seenWorkspaces) {
+      try {
+        const stateRoot = stateRootOf(workspace, config)
+        for (const team of await listAllTeams(stateRoot)) {
+          if (team.phase === 'staged' || team.halted === true) continue
+          await reconcileStrandedCaptainTasks(workspace, team.id)
+        }
+      } catch (error: unknown) {
+        ctx.logger.warn(`teams-x: reconcile sweep failed for ${workspace}: ${String(error)}`)
+      }
+    }
+  }
+  const reconcileTimer = setInterval(() => { void reconcileSeenRoots() }, 60_000)
+  reconcileTimer.unref?.()
+
   const runtime: TeamScheduler = {
     async kickTeam(workspace, teamId, suppliedCaptain) {
       const stateRoot = stateRootOf(workspace, config)
+      await reconcileStrandedCaptainTasks(workspace, teamId)
       const team = await readTeam(stateRoot, teamId)
       if (team === undefined || team.halted === true || team.phase === 'staged') return
       const captain = liveCaptain(ctx, team.captainSessionId, suppliedCaptain)
@@ -343,7 +440,7 @@ export function installTeamScheduler(ctx: Context, config: SchedulerConfig): Tea
     },
 
     async kickMember(workspace, teamId, memberName, suppliedCaptain) {
-      const stateRoot = stateRootOf(workspace, config)
+      const stateRoot = trackRoot(workspace)
       const queueKey = memberQueueKey(stateRoot, teamId, memberName)
       await serializeMember(queueKey, async () => {
         const team = await readTeam(stateRoot, teamId)
@@ -450,7 +547,13 @@ export function installTeamScheduler(ctx: Context, config: SchedulerConfig): Tea
           assignmentPrompt(ticket, config.stateDir, team.id),
           new AbortController().signal,
         )
-        if (accepted) return
+        if (accepted) {
+          void appendTeamOperation(stateRoot, team.id, {
+            actor: 'scheduler', action: 'task-dispatched', taskId: ticket.taskId,
+            to: ticket.memberName, detail: `attempt ${ticket.attempt} (${ticket.kind ?? 'work'})`,
+          })
+          return
+        }
 
         // Roll back only our exact failed dispatch. A concurrent captain
         // handoff has already changed the capability and wins.
@@ -468,6 +571,10 @@ export function installTeamScheduler(ctx: Context, config: SchedulerConfig): Tea
           const currentMember = fresh.members.find((candidate) => candidate.name === ticket.memberName)
           if (currentMember !== undefined && currentMember.status !== 'removed') currentMember.status = 'idle'
           await writeTeam(stateRoot, fresh)
+          void appendTeamOperation(stateRoot, team.id, {
+            actor: 'scheduler', action: 'dispatch-rolled-back', taskId: ticket.taskId,
+            to: task.assignee ?? undefined, detail: 'delivery was rejected',
+          })
         })
       })
     },
@@ -477,17 +584,41 @@ export function installTeamScheduler(ctx: Context, config: SchedulerConfig): Tea
       const repairConfig = config.repairLoop
       if (repairConfig?.autoDerive === false) return
       const maxRounds = repairConfig?.maxRounds ?? DEFAULT_REPAIR_MAX_ROUNDS
-      await withTeamLock(teamLockKey(stateRoot, teamId), async () => {
+      const prepared = await withTeamLock(teamLockKey(stateRoot, teamId), async () => {
         const team = await readTeam(stateRoot, teamId)
         if (team === undefined || team.halted === true || team.phase === 'staged') return
         const task = team.tasks.find((t) => t.id === taskId)
         if (task === undefined) return
         // Only trigger for quality tasks with verdict requiring repair
         if (!verdictRequiresRepair(task.verdict)) return
-        // Check round limit
-        if (hasReachedRoundLimit(task, maxRounds)) {
-          ctx.logger.info(`teams-x: repair loop reached round limit for task ${taskId}`)
+        // An open sibling repair derived from this same source already exists:
+        // deriving another would pile up duplicated review work
+        // (2026-09-13 real run: two pending "Repair:" siblings on one task).
+        const openSibling = openRepairSiblingFor(team.tasks, taskId)
+        if (openSibling !== undefined) {
+          ctx.logger.info(`teams-x: repair task ${openSibling.id} is already open for ${taskId}; not deriving another`)
+          void appendTeamOperation(stateRoot, teamId, {
+            actor: 'scheduler', action: 'repair-skip-duplicate', taskId,
+            detail: `open sibling ${openSibling.id} already covers this failure`,
+          })
           return
+        }
+        // Check round limit. The captain notification message is appended
+        // inside this lock, but steering/acknowledging happens AFTER it —
+        // acknowledgeMailbox takes the same team lock and would deadlock.
+        if (hasReachedRoundLimit(task, maxRounds)) {
+          ctx.logger.warn(`teams-x: repair loop reached round limit (${maxRounds}) for task ${taskId}; manual intervention required`)
+          const message = {
+            ...createMessage('teamsx', CAPTAIN_KEY,
+              `Task ${taskId} ("${task.subject}") has failed through ${maxRounds} repair rounds; automatic repair stopped. Review the findings on the task and decide: reassign with a sharper contract, split the task, or drop it.`),
+            deliveryClaimedAt: Date.now(),
+          }
+          await appendMailbox(stateRoot, teamId, CAPTAIN_KEY, message)
+          void appendTeamOperation(stateRoot, teamId, {
+            actor: 'scheduler', action: 'repair-round-limit', taskId,
+            detail: `round limit ${maxRounds} reached; captain notified`,
+          })
+          return { captainSessionId: team.captainSessionId, message }
         }
         // Derive repair task
         const findings = task.findings ?? []
@@ -495,8 +626,22 @@ export function installTeamScheduler(ctx: Context, config: SchedulerConfig): Tea
         team.tasks.push(repairTask)
         team.taskSeq += 1
         await writeTeam(stateRoot, team)
+        void appendTeamOperation(stateRoot, teamId, {
+          actor: 'scheduler', action: 'repair-derived', taskId: repairTask.id,
+          detail: `derived from failed task ${taskId} (round ${repairTask.round ?? 0})`,
+        })
         ctx.logger.info(`teams-x: derived repair task ${repairTask.id} for failed task ${taskId}`)
+        return undefined
       })
+      if (prepared !== undefined) {
+        // Same lease/ack contract as send_message: steering may synchronously
+        // start another agent turn, so it must run outside the team lock.
+        const live = liveCaptain(ctx, prepared.captainSessionId)
+        const delivered = live !== undefined && steerCaptainReport(live, 'teamsx', prepared.message.content)
+        await withTeamLock(teamLockKey(stateRoot, teamId), () => delivered
+          ? acknowledgeMailbox(stateRoot, teamId, CAPTAIN_KEY, [prepared.message.id])
+          : releaseMailboxDelivery(stateRoot, teamId, CAPTAIN_KEY, [prepared.message.id]))
+      }
     },
   }
 
@@ -527,7 +672,19 @@ export function installTeamScheduler(ctx: Context, config: SchedulerConfig): Tea
           task.reassigning = false
           requeued = true
         }
-        if (requeued) await writeTeam(stateRoot, fresh)
+        // Shadow takeovers end with the captain's turn: hand the task back to
+        // the member WITHOUT touching their attempt — it stays parked and the
+        // member can still submit results or resume on guidance.
+        let shadowReleased = false
+        for (const task of fresh.tasks) {
+          if (task.takenOverBy !== 'captain'
+            || task.status === 'completed'
+            || task.status === 'failed'
+            || task.status === 'cancelled') continue
+          task.takenOverBy = undefined
+          shadowReleased = true
+        }
+        if (requeued || shadowReleased) await writeTeam(stateRoot, fresh)
       })
       if (requeued) await runtime.kickTeam(workspace, located.id, agent)
       return

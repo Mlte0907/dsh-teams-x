@@ -24,7 +24,7 @@
 
 import { createHash, randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
-import { mkdir, readFile, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { appendFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import {
@@ -48,6 +48,35 @@ const MAILBOX_DELIVERY_LEASE_MS = 60_000
 /** In-process per-team mutation queues (promise chains). */
 const locks = new Map<string, Promise<unknown>>()
 
+// ── structured operation log (operations.jsonl) ──
+
+/** Rotate the operation log after this size; one previous generation is kept. */
+const OPERATIONS_LOG_MAX_BYTES = 1_000_000
+
+/**
+ * Append one structured operation record to `<teamId>/operations.jsonl`.
+ * This is the plugin's own observability channel (the host logger does not
+ * reach disk on every deployment): one line per state transition with actor,
+ * action, and target, so stalls and takeover flows can be reconstructed
+ * without hand-reading team.json. Failures never affect the main flow.
+ */
+export async function appendTeamOperation(
+  stateRoot: string,
+  teamId: string,
+  entry: { actor: string; action: string; taskId?: string; from?: string; to?: string; detail?: string },
+): Promise<void> {
+  try {
+    const dir = join(stateRoot, teamId)
+    const file = join(dir, 'operations.jsonl')
+    const line = `${JSON.stringify({ ts: Date.now(), ...entry })}\n`
+    const current = await stat(file).catch(() => undefined)
+    if (current !== undefined && current.size > OPERATIONS_LOG_MAX_BYTES) {
+      await rename(file, join(dir, 'operations.1.jsonl')).catch(() => undefined)
+    }
+    await appendFile(file, line, 'utf8')
+  } catch { /* observability must never break the mutation it observes */ }
+}
+
 // ── cross-process file lock (opt-in via DSH_TEAMSX_FILE_LOCK=1) ──
 
 /** Directory for lock files when cross-process locking is enabled. */
@@ -58,8 +87,16 @@ const FILE_LOCK_TIMEOUT_MS = 10_000
 const FILE_LOCK_RETRY_MS = 50
 /** A lock older than this is assumed stale (holder crashed) and reclaimed. */
 const FILE_LOCK_STALE_MS = 30_000
-/** Whether cross-process file locking is enabled. */
-const FILE_LOCK_ENABLED = process.env['DSH_TEAMSX_FILE_LOCK'] === '1'
+/**
+ * Whether cross-process file locking is enabled. On by default since v0.3:
+ * concurrent dsh processes sharing one state root are a real scenario
+ * (manual starts, multi-instance mishaps), and the lock's stale-reclaim
+ * makes it safe. Opt out explicitly with DSH_TEAMSX_FILE_LOCK=0.
+ */
+export function crossProcessLockEnabled(): boolean {
+  return process.env['DSH_TEAMSX_FILE_LOCK'] !== '0'
+}
+const FILE_LOCK_ENABLED = crossProcessLockEnabled()
 
 interface LockFileContent {
   pid: number
@@ -114,6 +151,16 @@ async function acquireFileLock(key: string): Promise<() => Promise<void>> {
  * @param fn - the mutation to run exclusively.
  * @returns the mutation's result.
  */
+/**
+ * File locks currently held by this process. The in-process queue already
+ * serializes same-key mutations, so one acquisition covers a whole queued
+ * burst: the lock is handed to the next queued mutation instead of being
+ * released and reacquired per call (a 500-mutation burst was paying one
+ * full acquire/release round trip per call). Released as soon as no queued
+ * successor remains.
+ */
+const heldFileLocks = new Map<string, { release: () => Promise<void>; holders: number }>()
+
 export async function withTeamLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
   const previous = locks.get(key) ?? Promise.resolve()
   let release!: () => void
@@ -121,11 +168,25 @@ export async function withTeamLock<T>(key: string, fn: () => Promise<T>): Promis
   const tail = previous.then(() => gate)
   locks.set(key, tail)
   await previous
-  const releaseFileLock = FILE_LOCK_ENABLED ? await acquireFileLock(key) : undefined
+  let held = heldFileLocks.get(key)
+  if (FILE_LOCK_ENABLED && held === undefined) {
+    held = { release: await acquireFileLock(key), holders: 0 }
+    heldFileLocks.set(key, held)
+  }
+  if (held !== undefined) held.holders += 1
   try {
     return await fn()
   } finally {
-    await releaseFileLock?.()
+    if (held !== undefined) {
+      held.holders -= 1
+      // Hand the lock to a queued successor instead of releasing it; release
+      // only when this was the last holder and nobody chained after us.
+      const successorChained = locks.get(key) !== tail
+      if (held.holders <= 0 && !successorChained) {
+        heldFileLocks.delete(key)
+        await held.release()
+      }
+    }
     release()
     // Delete the map entry when no later waiter chained onto this tail, so
     // finished teams do not accumulate stale promise references.
@@ -697,6 +758,29 @@ export async function listTeamsForParticipant(
     if (participates) matches.push(team)
   }
   return matches
+}
+
+/**
+ * List every live (non-archived) team under one state root.
+ * Used by the background reconciler, which has no participant id to filter by.
+ */
+export async function listAllTeams(stateRoot: string): Promise<TeamState[]> {
+  let entries
+  try {
+    entries = await readdir(stateRoot, { withFileTypes: true })
+  } catch (error: unknown) {
+    if (error instanceof Error && 'code' in error && (error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return []
+    }
+    throw error
+  }
+  const teams: TeamState[] = []
+  for (const entry of entries) {
+    if (!entry.isDirectory() || entry.name === 'archive') continue
+    const team = await readTeam(stateRoot, entry.name).catch(() => undefined)
+    if (team !== undefined) teams.push(team)
+  }
+  return teams
 }
 
 /**

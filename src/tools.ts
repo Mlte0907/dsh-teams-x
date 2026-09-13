@@ -15,9 +15,11 @@ import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
+import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { drainChildren } from './compat.ts'
 import {
+  appendTeamOperation,
   acknowledgeMailbox,
   appendMailbox,
   archiveTeamDir,
@@ -51,7 +53,10 @@ import {
   transitionError,
   validateCreateTask,
 } from './quality.ts'
-import { verdictRequiresRepair } from './scheduler.ts'
+import {
+  cancelSupersededRepairSiblings,
+  verdictRequiresRepair,
+} from './scheduler.ts'
 import {
   deliverToMember,
   installRetiredMemberGuard,
@@ -360,7 +365,7 @@ function memberOpenTask(team: TeamState, memberName: string, exceptTaskId?: stri
 /** Captain work is immediate: allow one unfinished takeover at a time. */
 function captainOpenTask(team: TeamState, exceptTaskId?: string): TeamTask | undefined {
   return team.tasks.find((task) => task.id !== exceptTaskId
-    && task.assignee === CAPTAIN_KEY
+    && (task.assignee === CAPTAIN_KEY || task.takenOverBy === 'captain')
     && !TERMINAL_TASK_STATUSES.includes(task.status))
 }
 
@@ -1364,12 +1369,34 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
           || task.assignee === undefined || task.assignee === CAPTAIN_KEY
           ? undefined
           : fresh.members.find((member) => member.name === task.assignee && member.status !== 'removed')
+        // 影子接管（v0.3）：队长接管成员任务时不再撤销成员 attempt、不再改写
+        // assignee——只打 takenOverBy 标记。成员保留提交权与续接能力，队长
+        // 回合结束（idle 边沿）自动归还，无需 reassign-back 往返
+        // （2026-09-13 实测：旧流程把 14:25 队长与 16:21 工程师双双锁在门外）。
+        const shadowTakeover = target === CAPTAIN_KEY
+          && task.assignee !== undefined && task.assignee !== CAPTAIN_KEY
+        if (shadowTakeover) {
+          task.takenOverBy = 'captain'
+          task.handoffId = randomUUID()
+          task.reassigning = true
+          task.updatedAt = Date.now()
+          await writeTeam(stateRoot, fresh)
+          return {
+            previousAssignee,
+            previousMember: previousMember === undefined ? undefined : { ...previousMember },
+            handoffId: task.handoffId,
+            expectedAssignee: task.assignee,
+            shadow: true,
+          }
+        }
         invalidateTaskAttempt(task, target, true)
         await writeTeam(stateRoot, fresh)
         return {
           previousAssignee,
           previousMember: previousMember === undefined ? undefined : { ...previousMember },
           handoffId: task.handoffId,
+          expectedAssignee: target,
+          shadow: false,
         }
       })
 
@@ -1386,18 +1413,31 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
       await withTeamLock(teamLockKey(stateRoot, team.id), async () => {
         const fresh = await requireFreshCaptainTeam(stateRoot, team.id, captain.id)
         const task = requireTask(fresh, args.task_id)
-        if (task.handoffId !== revoked.handoffId || task.assignee !== target || task.reassigning !== true) {
+        if (task.handoffId !== revoked.handoffId || task.reassigning !== true
+          || task.assignee !== revoked.expectedAssignee) {
           throw new Error(`task ${task.id} changed during reassignment; refusing to overwrite the newer state`)
         }
         task.reassigning = false
         if (quiescenceError === undefined && target === CAPTAIN_KEY) {
-          beginTaskAttempt(task, CAPTAIN_KEY)
-          // The captain is already in the turn that requested takeover; there
-          // is no later member claim handshake to move claimed -> in_progress.
-          task.status = 'in_progress'
-          task.updatedAt = Date.now()
+          if (revoked.shadow) {
+            // 影子接管落地：attempt/assignee 不动，仅标记 + 置 in_progress
+            task.takenOverBy = 'captain'
+            if (task.status === 'pending') task.status = 'in_progress'
+            task.updatedAt = Date.now()
+          } else {
+            beginTaskAttempt(task, CAPTAIN_KEY)
+            // The captain is already in the turn that requested takeover; there
+            // is no later member claim handshake to move claimed -> in_progress.
+            task.status = 'in_progress'
+            task.updatedAt = Date.now()
+          }
         }
         await writeTeam(stateRoot, fresh)
+        void appendTeamOperation(stateRoot, team.id, {
+          actor: 'captain', action: revoked.shadow ? 'task-shadow-takeover' : 'task-reassigned',
+          taskId: task.id, from: revoked.previousAssignee, to: target,
+          ...(args.reason !== undefined ? { detail: args.reason } : {}),
+        })
         appendTeamEvent(ctx, captain.session, 'teamsx/task-updated', {
           teamId: fresh.id,
           taskId: task.id,
@@ -1507,6 +1547,10 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
           taskId: task.id,
           status: task.status,
           assignee: task.assignee,
+        })
+        void appendTeamOperation(stateRoot, team.id, {
+          actor: assignee, action: 'task-claimed', taskId: task.id,
+          detail: `attempt ${task.attempt ?? 1}`,
         })
         return {
           task_id: task.id,
@@ -1628,9 +1672,10 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
         const { team: fresh, identity } = await requireFreshParticipant(stateRoot, team.id, caller.id)
         const task = requireTask(fresh, args.task_id)
         if (identity.kind === 'captain'
+          && task.takenOverBy !== 'captain'
           && task.assignee !== undefined
           && task.assignee !== CAPTAIN_KEY) {
-          throw new Error(`task ${task.id} is owned by member "${task.assignee}"; call teamsx_reassign_task with assignee="captain" before takeover`)
+          throw new Error(`task ${task.id} is owned by member "${task.assignee}"; call teamsx_reassign_task with assignee="captain" first — shadow takeover keeps the member's submit rights, so no reassign-back is needed`)
         }
         if (identity.kind === 'member') {
           if (task.assignee !== identity.name) {
@@ -1674,11 +1719,14 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
           commandsRun,
         })
         if (!gate.ok) throw new Error(gate.error ?? 'update_task rejected by quality gates')
+        const previousStatus = task.status
         if (args.status !== undefined) {
           const transition = transitionError(task.status, args.status)
           if (transition !== undefined) throw new Error(transition)
           task.status = args.status
         }
+        // 终结态清空影子标记：接管语义只对进行中的工作有意义
+        if (TERMINAL_TASK_STATUSES.includes(task.status)) task.takenOverBy = undefined
         if (args.output !== undefined) task.output = args.output
         if (args.verdict !== undefined) task.verdict = args.verdict as ReviewVerdict
         if (findings !== undefined) task.findings = findings
@@ -1686,6 +1734,25 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
         if (acceptanceResults !== undefined) task.acceptanceResults = acceptanceResults
         if (commandsRun !== undefined) task.commandsRun = commandsRun
         task.updatedAt = Date.now()
+        // 源任务成功完成时，级联取消仍在排队的同源 Repair 兄弟——否则它们会
+        // 变成就绪的重复工作（2026-09-13 实测 t5/t6 双悬置）。
+        if (task.status === 'completed') {
+          for (const sibling of cancelSupersededRepairSiblings(fresh.tasks, task.id)) {
+            appendTeamEvent(ctx, captainSessionOf(ctx, fresh.captainSessionId, caller.session), 'teamsx/task-updated', {
+              teamId: fresh.id, taskId: sibling.id, status: sibling.status, output: sibling.output,
+            })
+            void appendTeamOperation(stateRoot, team.id, {
+              actor: 'scheduler', action: 'repair-cancelled', taskId: sibling.id,
+              detail: `superseded by completion of ${task.id}`,
+            })
+          }
+        }
+        void appendTeamOperation(stateRoot, team.id, {
+          actor: identity.kind === 'captain' ? 'captain' : identity.name,
+          action: 'task-updated', taskId: task.id,
+          from: previousStatus, to: task.status,
+          ...(task.verdict !== undefined ? { detail: `verdict=${task.verdict}` } : {}),
+        })
         await writeTeam(stateRoot, fresh)
         appendTeamEvent(ctx, captainSessionOf(ctx, fresh.captainSessionId, caller.session), 'teamsx/task-updated', {
           teamId: fresh.id,
