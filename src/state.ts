@@ -81,6 +81,27 @@ export function appendTaskProgress(task: TeamTask, text: string): void {
   task.updatedAt = Date.now()
 }
 
+/**
+ * Read the last `limit` structured operation records of one team
+ * (newest first). Missing or corrupt logs yield an empty list — the
+ * operation log is observability, never authority.
+ */
+export async function readTeamOperations(
+  stateRoot: string,
+  teamId: string,
+  limit = 50,
+): Promise<Array<{ ts: number; actor: string; action: string; taskId?: string; from?: string; to?: string; detail?: string }>> {
+  try {
+    const raw = await readFile(join(stateRoot, teamId, 'operations.jsonl'), 'utf8')
+    const lines = raw.split('\n').filter((line) => line.trim() !== '')
+    return lines.slice(-limit).reverse().map((line) => JSON.parse(line) as {
+      ts: number; actor: string; action: string; taskId?: string; from?: string; to?: string; detail?: string
+    })
+  } catch {
+    return []
+  }
+}
+
 /** In-process per-team mutation queues (promise chains). */
 const locks = new Map<string, Promise<unknown>>()
 

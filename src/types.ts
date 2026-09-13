@@ -75,6 +75,20 @@ export interface TaskProgressEntry {
   readonly text: string
 }
 
+/** One archived contract revision from the captain re-contract flow. */
+export interface ContractRevision {
+  readonly at: number
+  readonly actor: string
+  readonly previous: {
+    readonly objective?: string
+    readonly inScope?: readonly string[]
+    readonly outOfScope?: readonly string[]
+    readonly acceptance?: readonly string[]
+    readonly verify?: readonly string[]
+  }
+  readonly note?: string
+}
+
 export interface TeamTask {
   id: string
   subject: string
@@ -98,6 +112,10 @@ export interface TeamTask {
   artifact?: { readonly file: string; readonly bytes: number }
   /** Wall-clock start of the current attempt; cleared when the attempt is invalidated. */
   attemptStartedAt?: number
+  /** Cumulative token usage of the owner session recorded at task terminal. */
+  usage?: { readonly inputTokens: number; readonly outputTokens: number; readonly cacheReadTokens?: number; readonly cacheWriteTokens?: number }
+  /** Previous contract revisions (captain re-contract flow, newest first, cap 5). */
+  contractHistory?: readonly ContractRevision[]
   /** Task ids that must reach `completed` before this task can be claimed. */
   dependencies: string[]
   /** The worker's written result, set when the task completes or fails. */

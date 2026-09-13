@@ -17,7 +17,7 @@ import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
-import { drainChildren } from './compat.ts'
+import { drainChildren, readTokenUsage } from './compat.ts'
 import {
   appendTaskProgress,
   appendTeamOperation,
@@ -1579,6 +1579,12 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
       },
       output: { type: 'string', description: 'Result summary; set when completing or failing. Outputs above 8000 chars are stored as an artifact file automatically (team.json keeps a preview).' },
       progress: { type: 'string', description: 'Progress note for a long-running attempt WITHOUT changing status. Appended to the task progress log (cap 20); visible on the panel.' },
+      objective: { type: 'string', description: 'Captain re-contract: replacement objective (non-terminal tasks only).' },
+      inScope: { type: 'array', items: { type: 'string' }, description: 'Captain re-contract: replacement in-scope path list.' },
+      outOfScope: { type: 'array', items: { type: 'string' }, description: 'Captain re-contract: replacement out-of-scope list.' },
+      acceptance: { type: 'array', items: { type: 'string' }, description: 'Captain re-contract: replacement acceptance criteria.' },
+      verify: { type: 'array', items: { type: 'string' }, description: 'Captain re-contract: replacement verify commands.' },
+      contractNote: { type: 'string', description: 'Captain re-contract: why the contract changed (archived with the previous contract).' },
       attempt_id: { type: 'string', description: 'Current execution capability returned by claim_task (required for members when present on the task).' },
       verdict: {
         type: 'string',
@@ -1675,7 +1681,27 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
       const updated = await withTeamLock(teamLockKey(stateRoot, team.id), async () => {
         const { team: fresh, identity } = await requireFreshParticipant(stateRoot, team.id, caller.id)
         const task = requireTask(fresh, args.task_id)
+        // 契约修订校验先于成员 attempt 守卫：成员发起修订时得到明确的
+        // "captain action" 拒绝，而不是误导性的 stale-attempt 错误。
+        const contractRevisionRequested = args.objective !== undefined || args.inScope !== undefined
+          || args.outOfScope !== undefined || args.acceptance !== undefined || args.verify !== undefined
+        const contractRevisionOnly = contractRevisionRequested
+          && args.status === undefined && args.output === undefined && args.progress === undefined
+        if (contractRevisionRequested) {
+          if (identity.kind !== 'captain') {
+            throw new Error('contract revision is a captain action')
+          }
+          if (TERMINAL_TASK_STATUSES.includes(task.status)) {
+            throw new Error(`task ${task.id} is terminal; contract revision applies to open tasks`)
+          }
+          for (const list of [args.inScope, args.outOfScope, args.acceptance, args.verify]) {
+            if (list !== undefined && (!Array.isArray(list) || list.some((item) => typeof item !== 'string' || String(item).trim() === ''))) {
+              throw new Error('contract lists must be arrays of non-empty strings')
+            }
+          }
+        }
         if (identity.kind === 'captain'
+          && !contractRevisionOnly
           && task.takenOverBy !== 'captain'
           && task.assignee !== undefined
           && task.assignee !== CAPTAIN_KEY) {
@@ -1758,6 +1784,29 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
           task.output = spilled.output
           if (spilled.artifact !== undefined) task.artifact = spilled.artifact
         }
+        if (contractRevisionRequested) {
+          const previous = {
+            ...(task.objective === undefined ? {} : { objective: task.objective }),
+            ...(task.inScope === undefined ? {} : { inScope: task.inScope }),
+            ...(task.outOfScope === undefined ? {} : { outOfScope: task.outOfScope }),
+            ...(task.acceptance === undefined ? {} : { acceptance: task.acceptance }),
+            ...(task.verify === undefined ? {} : { verify: task.verify }),
+          }
+          const history = [
+            ...(task.contractHistory ?? []),
+            { at: Date.now(), actor: 'captain', previous, ...(args.contractNote !== undefined && args.contractNote !== '' ? { note: args.contractNote } : {}) },
+          ]
+          task.contractHistory = history.length > 5 ? history.slice(history.length - 5) : history
+          if (args.objective !== undefined) task.objective = args.objective
+          if (args.inScope !== undefined) task.inScope = args.inScope
+          if (args.outOfScope !== undefined) task.outOfScope = args.outOfScope
+          if (args.acceptance !== undefined) task.acceptance = args.acceptance
+          if (args.verify !== undefined) task.verify = args.verify
+        }
+        if (TERMINAL_TASK_STATUSES.includes(task.status)) {
+          const usage = readTokenUsage(ctx, caller.id)
+          if (usage !== undefined) task.usage = usage
+        }
         if (args.verdict !== undefined) task.verdict = args.verdict as ReviewVerdict
         if (findings !== undefined) task.findings = findings
         if (changedPaths !== undefined) task.changedPaths = changedPaths
@@ -1781,6 +1830,7 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
           actor: identity.kind === 'captain' ? 'captain' : identity.name,
           action: 'task-updated', taskId: task.id,
           from: previousStatus, to: task.status,
+          ...(contractRevisionRequested ? { detail: 'contract revised' } : {}),
           ...(task.verdict !== undefined ? { detail: `verdict=${task.verdict}` } : {}),
         })
         await writeTeam(stateRoot, fresh)

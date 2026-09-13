@@ -134,6 +134,39 @@ export function cancelSupersededRepairSiblings(tasks: readonly TeamTask[], sourc
   return cancelled
 }
 
+// ── member stall detection (v0.6) ──
+
+/** Owner session gone entirely → the open attempt is orphaned; requeue it. */
+export const STALL_ORPHAN_MS = 5 * 60_000
+/** Owner idle with a parked attempt → remind the captain once per attempt. */
+export const STALL_PARKED_NOTIFY_MS = 30 * 60_000
+/** Owner running but no progress/updates for this long → advise the captain. */
+export const STALL_RUNNING_NOTIFY_MS = 60 * 60_000
+
+export type StallKind = 'orphan' | 'parked-stall' | 'running-stall'
+
+/**
+ * Classify one open member-owned attempt against its owner's live status.
+ * Pure — the reconciler turns the result into requeues / captain mail.
+ * `lastActivity` is the task's updatedAt; `ownerLive` is the owning member's
+ * live agent status, or undefined when the session is gone.
+ */
+export function classifyStall(
+  task: Pick<TeamTask, 'status' | 'attemptStartedAt' | 'updatedAt'>,
+  ownerLive: 'running' | 'idle' | undefined,
+  now: number,
+): StallKind | null {
+  if (task.status !== 'claimed' && task.status !== 'in_progress') return null
+  const lastActivity = Math.max(task.updatedAt, task.attemptStartedAt ?? 0)
+  if (ownerLive === undefined) {
+    return now - lastActivity >= STALL_ORPHAN_MS ? 'orphan' : null
+  }
+  if (ownerLive === 'idle') {
+    return now - lastActivity >= STALL_PARKED_NOTIFY_MS ? 'parked-stall' : null
+  }
+  return now - lastActivity >= STALL_RUNNING_NOTIFY_MS ? 'running-stall' : null
+}
+
 /**
  * A captain-owned task is stranded when the captain session can no longer
  * drive it: the session is gone, or it is not actively running a turn.
@@ -409,6 +442,71 @@ export function installTeamScheduler(ctx: Context, config: SchedulerConfig): Tea
     })
   }
 
+  const stallNotified = new Map<string, number>()
+
+  /**
+   * Detect stalled member-owned attempts and act:
+   * - orphan（owner 会话已消失）→ 回收进共享池；
+   * - parked 超时 / running 无进度 → 每次尝试至多提醒队长一次。
+   * 必须在调用方持有的团队锁之外运行（自身取锁、自身投递）。
+   */
+  const detectStalledMemberWork = async (workspace: string, teamId: string): Promise<void> => {
+    const stateRoot = trackRoot(workspace)
+    const now = Date.now()
+    let requeued = false
+    const notifications: Array<{ memberId?: string; memberName: string; text: string }> = []
+    await withTeamLock(teamLockKey(stateRoot, teamId), async () => {
+      const team = await readTeam(stateRoot, teamId)
+      if (team === undefined || team.halted === true || team.phase === 'staged') return
+      for (const task of team.tasks) {
+        if (task.assignee === undefined || task.assignee === CAPTAIN_KEY) continue
+        const member = team.members.find((candidate) => candidate.name === task.assignee && candidate.status !== 'removed')
+        if (member === undefined) continue
+        const live = liveMember(ctx, member)
+        const ownerLive = live === undefined ? undefined : live.status
+        const stall = classifyStall(task, ownerLive, now)
+        if (stall === null) continue
+        const notifyKey = `${task.id}:${task.attemptId ?? 'x'}:${stall}`
+        if (stall === 'orphan') {
+          invalidateTaskAttempt(task)
+          task.reassigning = false
+          requeued = true
+          void appendTeamOperation(stateRoot, teamId, {
+            actor: 'scheduler', action: 'stalled-orphan-requeued', taskId: task.id,
+            to: task.assignee, detail: `owner session gone; open attempt recovered after ${Math.round((now - task.updatedAt) / 1000)}s idle`,
+          })
+          continue
+        }
+        if (stallNotified.has(notifyKey)) continue
+        stallNotified.set(notifyKey, now)
+        const text = stall === 'parked-stall'
+          ? `Task ${task.id} ("${task.subject}") is parked with member "${task.assignee}" awaiting guidance for ${Math.round((now - task.updatedAt) / 60000)} minutes. Send guidance with teamsx_send_message, or reassign it.`
+          : `Task ${task.id} ("${task.subject}") has been running at member "${task.assignee}" without any progress update for ${Math.round((now - task.updatedAt) / 60000)} minutes. Consider checking in.`
+        notifications.push({ memberId: member.id, memberName: task.assignee, text })
+        void appendTeamOperation(stateRoot, teamId, {
+          actor: 'scheduler', action: stall === 'parked-stall' ? 'stall-parked-notify' : 'stall-running-notify',
+          taskId: task.id, detail: text.slice(0, 200),
+        })
+      }
+      if (requeued) await writeTeam(stateRoot, team)
+    })
+    for (const note of notifications) {
+      const message = { ...createMessage('teamsx', CAPTAIN_KEY, note.text), deliveryClaimedAt: Date.now() }
+      await appendMailbox(stateRoot, teamId, CAPTAIN_KEY, message)
+      const live = liveCaptain(ctx, (await readTeam(stateRoot, teamId))?.captainSessionId ?? '')
+      const delivered = live !== undefined && steerCaptainReport(live, 'teamsx', message.content)
+      await withTeamLock(teamLockKey(stateRoot, teamId), () => delivered
+        ? acknowledgeMailbox(stateRoot, teamId, CAPTAIN_KEY, [message.id])
+        : releaseMailboxDelivery(stateRoot, teamId, CAPTAIN_KEY, [message.id]))
+    }
+    // 尝试变化后清理过期的提醒去重键
+    for (const key of stallNotified.keys()) {
+      const taskId = key.split(':')[0] ?? ''
+      const stillOpen = await readTeam(stateRoot, teamId).then((team) => team?.tasks.some((t) => t.id === taskId && (t.status === 'claimed' || t.status === 'in_progress')))
+      if (!stillOpen) stallNotified.delete(key)
+    }
+  }
+
   const reconcileSeenRoots = async (): Promise<void> => {
     for (const workspace of seenWorkspaces) {
       try {
@@ -416,6 +514,7 @@ export function installTeamScheduler(ctx: Context, config: SchedulerConfig): Tea
         for (const team of await listAllTeams(stateRoot)) {
           if (team.phase === 'staged' || team.halted === true) continue
           await reconcileStrandedCaptainTasks(workspace, team.id)
+          await detectStalledMemberWork(workspace, team.id)
         }
       } catch (error: unknown) {
         ctx.logger.warn(`teams-x: reconcile sweep failed for ${workspace}: ${String(error)}`)

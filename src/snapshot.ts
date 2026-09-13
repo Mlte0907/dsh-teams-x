@@ -20,8 +20,10 @@ import {
   readUnreadMailbox,
   taskDepthsById,
   taskVisualState,
+  readTeamOperations,
 } from './state.ts'
 import { TERMINAL_TASK_STATUSES, type TeamState, type TeamTask } from './types.ts'
+import { readTokenUsage } from './compat.ts'
 // Snapshot view types live in the zero-import snapshot-types module so the
 // browser panel can share them without pulling in the host graph.
 import type {
@@ -106,6 +108,11 @@ export async function assembleTeamSnapshot(
       unreadByMember.set(memberName, 0)
     }
   }
+  const readMemberUsage = (memberId: string) => {
+    if (options.historic === true || memberId === '') return {}
+    const usage = readTokenUsage(ctx, memberId)
+    return usage === undefined ? {} : { usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens } }
+  }
   const members: TeamActivityMember[] = roster.map((member) => {
     const owned = tasks.filter((task) => task.assignee === member.name)
     const done = owned.filter((task) => task.status === 'completed').length
@@ -127,6 +134,7 @@ export async function assembleTeamSnapshot(
       total: owned.length,
       currentTask: currentTaskOf(member.name, tasks),
       unread: unreadByMember.get(member.name) ?? 0,
+      ...(options.historic === true ? {} : readMemberUsage(member.id)),
     }
   })
   const captainInbox = await readUnreadMailbox(stateRoot, state.id, CAPTAIN_KEY)
@@ -168,6 +176,9 @@ export async function assembleTeamSnapshot(
           progressCount: log.length,
         }
       })(),
+      ...(task.usage === undefined ? {} : {
+        usage: { inputTokens: task.usage.inputTokens, outputTokens: task.usage.outputTokens },
+      }),
     })),
     messageCount: captainInbox.length
       + members.reduce((count, member) => count + member.unread, 0),
@@ -175,6 +186,7 @@ export async function assembleTeamSnapshot(
       from: message.from,
       content: message.content,
     })),
+    operations: await readTeamOperations(stateRoot, state.id, 50),
   }
 }
 

@@ -237,6 +237,13 @@ async function pauseMember(captainSessionId: string, teamId: string, memberName:
 }
 
 /** One member row of the roster. */
+/** Compact token formatter: 1234 → 1.2k, 45600 → 45.6k. */
+function formatTokens(n: number): string {
+  if (n < 1000) return String(n)
+  if (n < 1_000_000) return `${(n / 1000).toFixed(n < 10_000 ? 1 : 0)}k`
+  return `${(n / 1_000_000).toFixed(1)}M`
+}
+
 function MemberRow({ member, team, t, openMember, readOnly }: {
   member: TeamActivitySnapshot['members'][number]
   team: TeamActivitySnapshot
@@ -285,7 +292,14 @@ function MemberRow({ member, team, t, openMember, readOnly }: {
           </button>
         ) : member.name}
       </span>
-      <span className={css.memberMeta}>{pauseError ?? member.model}</span>
+      <span className={css.memberMeta}>
+        {pauseError ?? member.model}
+        {member.usage !== undefined && (
+          <span className={css.memberTokens} title="累计 token（token-meter）">
+            {` · ↑${formatTokens(member.usage.inputTokens)} ↓${formatTokens(member.usage.outputTokens)}`}
+          </span>
+        )}
+      </span>
       <span className={css.memberProgress} title={t('member.progress', { done: member.done, total: member.total })}>
         <span className={css.memberProgressBar} aria-hidden>
           <span
@@ -370,6 +384,9 @@ function TaskRow({ task, t }: { task: TeamActivitySnapshot['tasks'][number]; t: 
         )}
         {task.round !== undefined && task.round > 0 && (
           <span className={css.taskBadge} data-badge="round" title={`第 ${task.round} 轮修复`}>R{task.round}</span>
+        )}
+        {task.kind === 'repair' && task.dependencies.length > 0 && (
+          <span className={css.taskBadge} data-badge="source" title={`修复自 ${task.dependencies[0]}`}>↻ {task.dependencies[0]}</span>
         )}
         {task.takenOverBy === 'captain' && (
           <span className={css.taskBadge} data-badge="taken" title="队长影子接管中：成员保留提交权">队长接管</span>
@@ -550,6 +567,21 @@ function TeamCard({ team, t, openMember, readOnly, onSaved }: {
 
       <div className={css.dag}>
         {team.tasks.map((task) => <TaskRow key={task.id} task={task} t={t} />)}
+        {team.operations.length > 0 && (
+          <details className={css.timeline}>
+            <summary className={css.timelineSummary}>时间线（最近 {team.operations.length} 条）</summary>
+            <div className={css.timelineBody}>
+              {team.operations.map((op, index) => (
+                <div key={`${op.ts}-${index}`} className={css.timelineRow}>
+                  <span className={css.timelineTime}>{new Date(op.ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  <span className={css.timelineActor}>{op.actor}</span>
+                  <span className={css.timelineAction}>{op.action}{op.taskId !== undefined ? ` ${op.taskId}` : ''}</span>
+                  {op.detail !== undefined && <span className={css.timelineDetail} title={op.detail}>{op.detail}</span>}
+                </div>
+              ))}
+            </div>
+          </details>
+        )}
       </div>
 
       <footer className={css.inbox}>

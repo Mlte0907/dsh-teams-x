@@ -115,3 +115,40 @@ export async function drainChildren(
   await runtime.drainContinuableChildren(captain, childIds)
   return 'drained'
 }
+
+/** Cumulative per-session token usage projected by @deepseek-ai/dsh-token-meter. */
+export interface SessionTokenUsage {
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens?: number
+  cacheWriteTokens?: number
+}
+
+/**
+ * Read one session's cumulative token-usage projection. Returns undefined
+ * when the token-meter service is not mounted or the session is not live —
+ * cost display is best-effort by design.
+ */
+export function readTokenUsage(
+  ctx: { sessionProjections?: unknown; agents?: unknown },
+  sessionId: string,
+): SessionTokenUsage | undefined {
+  try {
+    const projections = (ctx as { sessionProjections?: { stateOf?: (session: unknown, key: string) => unknown } }).sessionProjections
+    const agents = (ctx as { agents?: { get?: (id: string) => { session?: unknown } | undefined } }).agents
+    const session = agents?.get?.(sessionId)?.session
+    if (projections?.stateOf === undefined || session === undefined) return undefined
+    const state = projections.stateOf(session, 'tokenUsage') as
+      | { uncachedInputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number }
+      | undefined
+    if (state === undefined || typeof state.outputTokens !== 'number') return undefined
+    return {
+      inputTokens: state.uncachedInputTokens ?? 0,
+      outputTokens: state.outputTokens,
+      ...(typeof state.cacheReadTokens === 'number' && state.cacheReadTokens > 0 ? { cacheReadTokens: state.cacheReadTokens } : {}),
+      ...(typeof state.cacheWriteTokens === 'number' && state.cacheWriteTokens > 0 ? { cacheWriteTokens: state.cacheWriteTokens } : {}),
+    }
+  } catch {
+    return undefined
+  }
+}

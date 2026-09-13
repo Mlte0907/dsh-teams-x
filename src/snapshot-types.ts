@@ -54,6 +54,8 @@ export interface TeamActivityMember {
   readonly total: number
   readonly currentTask: string
   readonly unread: number
+  /** Cumulative token usage of the member's live session (best-effort). */
+  readonly usage?: { readonly inputTokens: number; readonly outputTokens: number }
 }
 
 /** One task row of the activity snapshot. */
@@ -80,6 +82,8 @@ export interface TeamActivityTask {
   readonly progressLatest?: string
   /** Total progress notes recorded for this task. */
   readonly progressCount?: number
+  /** Cumulative token usage of the owner session captured at task terminal. */
+  readonly usage?: { readonly inputTokens: number; readonly outputTokens: number }
 }
 
 /** One captain-inbox preview row. */
@@ -102,4 +106,15 @@ export interface TeamActivitySnapshot {
   readonly tasks: readonly TeamActivityTask[]
   readonly messageCount: number
   readonly captainInbox: readonly TeamActivityMessage[]
+  /** Recent structured operations (newest first) for the timeline view. */
+  readonly operations: readonly TeamActivityOperation[]
+}
+
+/** One row of the panel timeline (from operations.jsonl). */
+export interface TeamActivityOperation {
+  readonly ts: number
+  readonly actor: string
+  readonly action: string
+  readonly taskId?: string
+  readonly detail?: string
 }

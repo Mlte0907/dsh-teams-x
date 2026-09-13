@@ -15,7 +15,7 @@
 仓库根目录自带与源码同步构建的 `dsh-teams-x-<version>.tgz`（零运行时依赖，宿主包全部走 peerDependencies）：
 
 ```sh
-dsh plugin --profile web add <仓库路径>/dsh-teams-x-0.2.1.tgz
+dsh plugin --profile web add <仓库路径>/dsh-teams-x-<version>.tgz
 ```
 
 装完 **重启宿主**（`dsh plugin add` 不会热加载新 bundle），然后按下文「安装验证」确认。

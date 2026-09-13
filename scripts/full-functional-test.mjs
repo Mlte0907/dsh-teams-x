@@ -1218,6 +1218,86 @@ try {
     check('T9', '失效后 attemptStartedAt 清除', pt1.attemptStartedAt === undefined)
   }
 
+  // ══════════════════ U v0.6 停滞/契约修订/时间线/usage ══════════════════
+  group('U v0.6 停滞检测/契约修订/时间线/usage')
+  {
+    const sched = await import(join(root, 'lib', 'scheduler.js'))
+    const compat = await import(join(root, 'lib', 'compat.js'))
+    const now = Date.now()
+    const mkStalled = (backMs) => ({ id: 't1', assignee: 'worker', status: 'in_progress', attempt: 1, attemptId: 'a1', attemptStartedAt: now - backMs, updatedAt: now - backMs })
+    const baseTask = mkStalled(0)
+    check('U1', 'owner 消失 ≥5min → orphan', sched.classifyStall({ ...mkStalled(6 * 60_000) }, undefined, now) === 'orphan')
+    check('U2', 'owner 消失但 <5min → 不分类', sched.classifyStall({ ...mkStalled(60_000) }, undefined, now) === null)
+    check('U3', 'owner idle ≥30min → parked-stall', sched.classifyStall({ ...mkStalled(31 * 60_000) }, 'idle', now) === 'parked-stall')
+    check('U4', 'owner running ≥60min → running-stall', sched.classifyStall({ ...mkStalled(61 * 60_000) }, 'running', now) === 'running-stall')
+    check('U5', 'running 但刚有更新 → 不分类', sched.classifyStall({ ...mkStalled(5 * 60_000) }, 'running', now) === null)
+    check('U6', '终结态 → 不分类', sched.classifyStall({ ...mkStalled(99 * 60_000), status: 'completed' }, undefined, now) === null)
+
+    // 契约修订流
+    const rootU = join(WS, CONFIG.stateDir)
+    const mU = makeMockCtx()
+    toolsMod.registerTeamsXTools(mU.ctx, CONFIG)
+    const captain = makeAgent('captain-U', WS)
+    mU.ctx.agents.set('captain-U', captain)
+    const cexec = { agent: captain, signal: SIGNAL() }
+    const workerAgent = makeAgent('child-950', WS)
+    workerAgent.status = 'running'
+    mU.ctx.agents.set('child-950', workerAgent)
+    const wexec = { agent: workerAgent, signal: SIGNAL() }
+    const nowU = Date.now()
+    await state.createTeamDir(rootU, {
+      name: 'recontract-team', id: 'recontract-team', captainSessionId: 'captain-U', createdAt: nowU,
+      members: [{ name: 'worker', id: 'child-950', status: 'working', joinedAt: nowU }],
+      tasks: [{ id: 't1', subject: 'impl', kind: 'implementation', status: 'in_progress', dependencies: [], attempt: 1, attemptId: 'att-u1', attemptStartedAt: nowU, assignee: 'worker', objective: 'old objective', inScope: ['src/old.ts'], createdAt: nowU, updatedAt: nowU }],
+      taskSeq: 1, phase: 'running',
+    })
+    // 成员发起契约修订 → 拒绝
+    await expectError('U7', '成员不能修订契约', () => toolOf(mU.registered, 'teamsx_update_task').execute(
+      { task_id: 't1', acceptance: ['new'] }, wexec,
+    ), 'contract revision is a captain action')
+    // 队长纯契约修订（不改状态）放行 + 旧契约入历史
+    await toolOf(mU.registered, 'teamsx_update_task').execute(
+      { task_id: 't1', objective: 'revised objective', inScope: ['src/new.ts'], contractNote: '范围收窄' }, cexec,
+    )
+    let teamU = await state.readTeam(rootU, 'recontract-team')
+    const tU = teamU.tasks.find((t) => t.id === 't1')
+    check('U8', '契约已修订', tU.objective === 'revised objective' && JSON.stringify(tU.inScope) === JSON.stringify(['src/new.ts']))
+    check('U9', '旧契约入历史（含备注）', tU.contractHistory?.length === 1 && tU.contractHistory[0].previous.objective === 'old objective' && tU.contractHistory[0].note === '范围收窄')
+    check('U10', '契约修订不改状态/不锁成员', tU.status === 'in_progress' && tU.assignee === 'worker' && tU.takenOverBy === undefined)
+    // 队长无接管直接改成员工作状态 → 仍被拦（守卫保留）
+    await expectError('U11', '非契约的成员工作状态更新仍拒', () => toolOf(mU.registered, 'teamsx_update_task').execute(
+      { task_id: 't1', status: 'completed', output: 'x' }, cexec,
+    ), 'call teamsx_reassign_task with assignee="captain"')
+    // 5 轮历史上限
+    for (let i = 0; i < 7; i += 1) {
+      await toolOf(mU.registered, 'teamsx_update_task').execute(
+        { task_id: 't1', objective: `rev ${i}`, contractNote: `n${i}` }, cexec,
+      )
+    }
+    teamU = await state.readTeam(rootU, 'recontract-team')
+    check('U12', '契约历史上限 5 条', teamU.tasks.find((t) => t.id === 't1')?.contractHistory?.length === 5)
+
+    // operations.jsonl 读取（newest first + limit）
+    const ops = await state.readTeamOperations(rootU, 'recontract-team', 3)
+    check('U13', 'readTeamOperations 返回最新 3 条（newest first）', ops.length === 3 && ops[0].ts >= ops[2].ts)
+    check('U14', 'operations 含契约修订记录', ops.some((o) => o.action === 'task-updated' && (o.detail ?? '').includes('contract revised')))
+
+    // readTokenUsage：有投影 → 映射；无 → undefined
+    const fakeCtx = { sessionProjections: { stateOf: () => ({ uncachedInputTokens: 1200, outputTokens: 300, cacheReadTokens: 50 }) }, agents: { get: () => ({ session: {} }) } }
+    const usage = compat.readTokenUsage(fakeCtx, 's1')
+    check('U15', 'tokenUsage 投影映射（input=uncached）', usage !== undefined && usage.inputTokens === 1200 && usage.outputTokens === 300 && usage.cacheReadTokens === 50)
+    check('U16', '无 token-meter → undefined', compat.readTokenUsage({ agents: { get: () => undefined } }, 's1') === undefined)
+
+    // 修补 T 组遗留：把 U 组的 usage 捕获也验证一遍（契约修订后完结捕获 owner usage）
+    const fakeCtx2 = {
+      sessionProjections: { stateOf: () => ({ uncachedInputTokens: 5000, outputTokens: 1500 }) },
+      agents: mU.ctx.agents,
+    }
+    // 直接以 tools 内部同源读取器验证（compat.readTokenUsage + agents.get）
+    const captured = compat.readTokenUsage(fakeCtx2, 'child-950')
+    check('U17', 'usage 捕获读取器工作', captured !== undefined && captured.outputTokens === 1500)
+  }
+
 } finally {
   // 保留沙盒供排查失败;确认稳定后可开启自动清理:
   await rm(sandbox, { recursive: true, force: true }).catch(() => undefined)

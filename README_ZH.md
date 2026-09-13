@@ -8,6 +8,20 @@
 
 > 本插件原生面向 **DeepSeek Harness 0.1.5-rc.2**，宿主 API 漂移点全部收敛在 `src/compat.ts` 能力探测层——宿主升级时通常只需改这一个文件。工具命名空间为 `teamsx_*`、状态目录为 `.teams-x`，与宿主内其他团队模式互不干扰。
 
+## 核心能力（v0.3 – v0.6）
+
+- **影子接管**：队长接管成员任务不再锁死贡献者——成员保留提交权与续接能力，队长回合结束自动归还
+- **事件驱动调度 + 对账兜底**：成员 idle/running 边沿自动派工；队长会话意外消亡时，搁浅任务由后台对账器回收
+- **质量契约与修复回路**：六种任务 kind 强制契约（objective/acceptance/inScope/verify），review 需裁决、禁止自审；失败自动派生修复任务（上限 3 轮、同源去重、源任务通过后级联取消）
+- **停滞检测**：成员会话消失 → 孤儿尝试自动回收；停车超 30 分钟 / 运行超 60 分钟无进度 → 邮箱提醒队长（每次尝试至多一次）
+- **任务产物工件化**：超 8000 字输出自动落盘 `artifacts/`，team.json 只留预览 + 引用
+- **进度上报**：`teamsx_update_task({ progress })` 长任务心跳，面板 💬 徽标可见
+- **契约修订流**：队长可在任务运行中修订 objective/inScope/acceptance 等契约，旧契约入历史（上限 5 轮）
+- **成本观测**：面板显示每成员/每任务累计 token（经 token-meter 投影，尽力而为）
+- **operations.jsonl 时间线**：每次状态迁移落一行结构化日志，面板内直接查看
+- **内置团队模板**：`profile=research-review / implement-verify / full-cycle` 开箱即用，用户同名配置覆盖
+- **并发安全**：per-team 锁 + 成员级串行队列 + 默认跨进程文件锁（`DSH_TEAMSX_FILE_LOCK=0` 关闭）
+
 ## 安装
 
 ### 方式 A：仓库 tgz 一条命令（推荐，最快）
@@ -15,7 +29,7 @@
 仓库根目录自带与源码同步构建的 `dsh-teams-x-<version>.tgz`（零运行时依赖，宿主包全部走 peerDependencies）：
 
 ```sh
-dsh plugin --profile web add <仓库路径>/dsh-teams-x-0.2.1.tgz
+dsh plugin --profile web add <仓库路径>/dsh-teams-x-<版本>.tgz
 ```
 
 装完 **重启宿主**（`dsh plugin add` 不会热加载新 bundle），然后按下文「安装验证」确认。

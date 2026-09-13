@@ -1054,3 +1054,29 @@
   border-color: var(--dsw-alias-state-error-primary, #f25a5a);
   color: var(--dsw-alias-state-error-primary, #f25a5a);
 }
+
+/* v0.6 member token usage (token-meter projection, best-effort). */
+.memberTokens { color: var(--dsw-alias-label-tertiary, #7d828a); }
+.taskBadge[data-badge='source'] {
+  border-color: var(--dsw-alias-state-business-primary, #679efe);
+  color: var(--dsw-alias-state-business-primary, #679efe);
+}
+
+/* v0.6 operations timeline (collapsed by default). */
+.timeline { margin-top: 10px; border-top: 1px solid var(--dsw-alias-border-l2, #3c3c3d); padding-top: 8px; }
+.timelineSummary {
+  cursor: pointer; font-size: 11px;
+  color: var(--dsw-alias-label-secondary, #8a8f98); user-select: none;
+}
+.timelineBody { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; max-height: 220px; overflow-y: auto; }
+.timelineRow {
+  display: flex; gap: 8px; font-size: 10.5px; line-height: 1.5;
+  color: var(--dsw-alias-label-secondary, #8a8f98); align-items: baseline;
+}
+.timelineTime { flex-shrink: 0; font-variant-numeric: tabular-nums; }
+.timelineActor { flex-shrink: 0; color: var(--dsw-alias-label-primary, #c9d1d9); }
+.timelineAction { flex-shrink: 0; font-weight: 500; }
+.timelineDetail {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  color: var(--dsw-alias-label-tertiary, #7d828a);
+}
