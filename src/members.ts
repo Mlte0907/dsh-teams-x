@@ -31,7 +31,7 @@ import {
   withTeamLock,
   writeTeam,
 } from './state.ts'
-import { appendTeamEvent, captainSessionOf } from './events.ts'
+import { appendTeamEvent, captainSessionOf, messageEventContent } from './events.ts'
 import type { TeamMember, TeamState, TeamTask } from './types.ts'
 
 /** Captain-only TeamsX tools hidden from newly spawned members. */
@@ -498,7 +498,7 @@ async function recordMemberTurnFailure(
       messageId: message.id,
       from: memberName,
       to: CAPTAIN_KEY,
-      content: message.content,
+      content: messageEventContent(message.content),
       ts: message.ts,
     })
     return { captainSessionId: team.captainSessionId, message }

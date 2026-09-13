@@ -44,7 +44,7 @@ import {
   withTeamLock,
   writeTeam,
 } from './state.ts'
-import { appendTeamEvent, captainSessionOf } from './events.ts'
+import { appendTeamEvent, captainSessionOf, messageEventContent } from './events.ts'
 import {
   evaluateQualityCompletion,
   isQualityKind,
@@ -1443,6 +1443,7 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
           taskId: task.id,
           status: task.status,
           assignee: task.assignee,
+          ...task.takenOverBy !== undefined ? { takenOverBy: task.takenOverBy } : {},
           ...args.reason !== undefined ? { output: `Reassigned: ${args.reason}` } : {},
         })
       })
@@ -1762,6 +1763,7 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
           ...task.output !== undefined ? { output: task.output } : {},
           ...task.verdict !== undefined ? { verdict: task.verdict } : {},
           ...task.round !== undefined ? { round: task.round } : {},
+          ...task.takenOverBy !== undefined ? { takenOverBy: task.takenOverBy } : {},
         })
         return {
           task_id: task.id,
@@ -1829,7 +1831,7 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
             messageId: message.id,
             from,
             to: CAPTAIN_KEY,
-            content: args.content,
+            content: messageEventContent(args.content),
             ts: message.ts,
           })
           return { kind: 'captain' as const, fresh, identity, message, from }
@@ -1845,7 +1847,7 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
           messageId: message.id,
           from,
           to: recipient.name,
-          content: args.content,
+          content: messageEventContent(args.content),
           ts: message.ts,
         })
         return { kind: 'member' as const, fresh, identity, message, from, recipient }

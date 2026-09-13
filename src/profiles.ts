@@ -125,14 +125,67 @@ function afterFirstToken(input: string): string {
  * Trim every profile key once, reject empty / colliding keys, and reject
  * more than MAX_TEAM_PROFILES entries.
  */
+/**
+ * Built-in team templates (v0.4): usable without any plugin config. Members
+ * without provider/model snapshot the captain's current route, so these work
+ * on every deployment. User config overrides a built-in by the same name.
+ */
+export const BUILT_IN_TEAM_PROFILES: Record<string, TeamProfileConfig> = {
+  'research-review': {
+    description: '调研 + 独立复核：researcher 带证据调研，reviewer 独立复核后再交付。',
+    protocol: 'researcher 只做只读调查，结论必须带可复现证据；reviewer 独立复核每条结论，冲突时队长裁决。',
+    executionPrompt: '所有结论必须带证据；发现队友结论有误时直接给出证据指出，不修改其产出。',
+    members: [
+      { name: 'researcher', role: 'researcher' },
+      { name: 'reviewer', role: 'reviewer' },
+    ],
+    tasks: [
+      { id: 'r1', subject: '调研：围绕目标收集事实与证据', assignee: 'researcher' },
+      { id: 'r2', subject: '复核：独立验证调研结论', assignee: 'reviewer', dependencies: ['r1'] },
+    ],
+    taskPlanning: 'seed',
+  },
+  'implement-verify': {
+    description: '实现 + 验证：engineer 实现，reviewer 独立验证验收项。',
+    protocol: 'engineer 只改声明范围内的路径；reviewer 独立跑验收命令，不采信 engineer 的自述。',
+    members: [
+      { name: 'engineer', role: 'engineer' },
+      { name: 'reviewer', role: 'reviewer' },
+    ],
+    tasks: [
+      { id: 'i1', subject: '实现：完成目标变更', assignee: 'engineer' },
+      { id: 'i2', subject: '验证：独立复核实现与验收项', assignee: 'reviewer', dependencies: ['i1'] },
+    ],
+    taskPlanning: 'seed',
+  },
+  'full-cycle': {
+    description: '调研 → 实现 → 审查 的完整交付链（三个角色各司其职）。',
+    protocol: 'researcher 先行调研并给出证据；engineer 按调研结论实现；reviewer 独立审查，needs_revision 走修复回路。',
+    members: [
+      { name: 'researcher', role: 'researcher' },
+      { name: 'engineer', role: 'engineer' },
+      { name: 'reviewer', role: 'reviewer' },
+    ],
+    tasks: [
+      { id: 'f1', subject: '调研：收集事实与约束', assignee: 'researcher' },
+      { id: 'f2', subject: '实现：按调研结论完成变更', assignee: 'engineer', dependencies: ['f1'] },
+      { id: 'f3', subject: '审查：独立复核变更质量', assignee: 'reviewer', dependencies: ['f2'] },
+    ],
+    taskPlanning: 'seed',
+  },
+}
+
 export function listConfiguredProfiles(
   profiles: Record<string, TeamProfileConfig> | undefined | null,
 ): ListedTeamProfile[] {
-  if (!profiles || typeof profiles !== 'object') return []
-  const keys = Object.keys(profiles)
-  if (keys.length > MAX_TEAM_PROFILES) {
-    throw new Error(`too many AgentTeams profiles (${keys.length}); the limit is ${MAX_TEAM_PROFILES}`)
+  // 内置模板永远可用；用户同名配置覆盖内置。数量上限只对用户键生效。
+  const userProfiles = profiles && typeof profiles === 'object' ? profiles : {}
+  const userKeys = Object.keys(userProfiles)
+  if (userKeys.length > MAX_TEAM_PROFILES) {
+    throw new Error(`too many AgentTeams profiles (${userKeys.length}); the limit is ${MAX_TEAM_PROFILES}`)
   }
+  const profiles_ = { ...BUILT_IN_TEAM_PROFILES, ...userProfiles }
+  const keys = Object.keys(profiles_)
   const seen = new Set<string>()
   const listed: ListedTeamProfile[] = []
   for (const rawKey of keys) {
@@ -140,7 +193,7 @@ export function listConfiguredProfiles(
     if (name === '') throw new Error('configured AgentTeams profiles include an empty key')
     if (seen.has(name)) throw new Error(`configured AgentTeams profiles have duplicate key "${name}"`)
     seen.add(name)
-    listed.push({ name, config: profiles[rawKey] as TeamProfileConfig })
+    listed.push({ name, config: profiles_[rawKey] as TeamProfileConfig })
   }
   return listed
 }
@@ -261,8 +314,13 @@ export function resolveTeamProfile(
     }
     if (!nonemptyString(raw['id'])) throw new Error(`profile "${profileName}" task ${index} missing non-empty id`)
     if (!nonemptyString(raw['subject'])) throw new Error(`profile "${profileName}" task ${index} missing non-empty subject`)
-    const id = raw['id'].trim()
-    // Remap seed-id dependencies to actual task ids (t1, t2, ...) in creation order
+    // The seed id is a local alias; the created team task gets the positional
+    // id (t1, t2, ...) in creation order — and the alias must be remapped in
+    // BOTH places: the task's own id AND its dependencies. Remapping only the
+    // dependencies produced broken profiles for any semantic-id seed
+    // (dependencies pointed at tasks that never existed; found by the v0.4
+    // built-in templates test).
+    const id = `t${index + 1}`
     const dependencies = (Array.isArray(raw['dependencies']) ? raw['dependencies'] : [])
       .filter(nonemptyString)
       .map((dep: string) => {

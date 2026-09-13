@@ -33,7 +33,7 @@ export interface TeamsXEventMap {
   'teamsx/member-added': { teamId: string; memberId: string; name: string; role?: string }
   'teamsx/member-removed': { teamId: string; memberId: string }
   'teamsx/task-created': { teamId: string; taskId: string; subject: string; dependencies: string[]; assignee?: string; kind?: string; round?: number }
-  'teamsx/task-updated': { teamId: string; taskId: string; status: string; assignee?: string; output?: string; verdict?: string; round?: number }
+  'teamsx/task-updated': { teamId: string; taskId: string; status: string; assignee?: string; output?: string; verdict?: string; round?: number; takenOverBy?: 'captain' }
   'teamsx/message-sent': { teamId: string; messageId: string; from: string; to: string; content: string; ts: number }
 }
 

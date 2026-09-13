@@ -324,6 +324,18 @@ function MemberRow({ member, team, t, openMember, readOnly }: {
   )
 }
 
+/** Humanize a millisecond duration for the task-age badge. */
+function formatElapsed(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000)
+  if (totalSeconds < 60) return `${totalSeconds}s`
+  const minutes = Math.floor(totalSeconds / 60)
+  if (minutes < 60) return `${minutes}m`
+  const hours = Math.floor(minutes / 60)
+  const rest = minutes % 60
+  if (hours < 24) return rest === 0 ? `${hours}h` : `${hours}h${rest}m`
+  return `${Math.floor(hours / 24)}d${hours % 24}h`
+}
+
 /** One task row of the DAG list, with depth strip, dependency tags, and status colors. */
 function TaskRow({ task, t }: { task: TeamActivitySnapshot['tasks'][number]; t: ReturnType<typeof makeT> }): ReactElement {
   const StateIcon = VISUAL_STATE_ICONS[task.state] as IconComponent | undefined
@@ -355,6 +367,20 @@ function TaskRow({ task, t }: { task: TeamActivitySnapshot['tasks'][number]; t: 
               <span key={dep} className={css.taskDepTag}>{dep}</span>
             ))}
           </span>
+        )}
+        {task.round !== undefined && task.round > 0 && (
+          <span className={css.taskBadge} data-badge="round" title={`第 ${task.round} 轮修复`}>R{task.round}</span>
+        )}
+        {task.takenOverBy === 'captain' && (
+          <span className={css.taskBadge} data-badge="taken" title="队长影子接管中：成员保留提交权">队长接管</span>
+        )}
+        {task.verdict !== undefined && (
+          <span className={css.taskBadge} data-badge={task.verdict}>
+            {task.verdict === 'pass' ? '✓ pass' : task.verdict === 'needs_revision' ? '⚠ 待修' : '✗ 拒绝'}
+          </span>
+        )}
+        {typeof task.elapsedMs === 'number' && (
+          <span className={css.taskBadge} data-badge="elapsed" title="任务耗时">{formatElapsed(task.elapsedMs)}</span>
         )}
       </span>
       <span className={css.taskAssignee}>{assignee}</span>

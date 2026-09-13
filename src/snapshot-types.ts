@@ -70,6 +70,12 @@ export interface TeamActivityTask {
   readonly kind?: string
   readonly round?: number
   readonly verdict?: string
+  /** Execution attempt generation (>=1 after first claim; bumped on retry). */
+  readonly attempt?: number
+  /** Shadow-takeover marker: the captain is personally driving this task. */
+  readonly takenOverBy?: 'captain'
+  /** Wall-clock task age in ms: createdAt → updatedAt when terminal, → now while open. */
+  readonly elapsedMs?: number
 }
 
 /** One captain-inbox preview row. */

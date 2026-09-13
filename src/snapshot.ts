@@ -21,7 +21,7 @@ import {
   taskDepthsById,
   taskVisualState,
 } from './state.ts'
-import type { TeamState, TeamTask } from './types.ts'
+import { TERMINAL_TASK_STATUSES, type TeamState, type TeamTask } from './types.ts'
 // Snapshot view types live in the zero-import snapshot-types module so the
 // browser panel can share them without pulling in the host graph.
 import type {
@@ -155,6 +155,11 @@ export async function assembleTeamSnapshot(
       ...task.kind === undefined ? {} : { kind: task.kind },
       ...task.round === undefined ? {} : { round: task.round },
       ...task.verdict !== undefined ? { verdict: task.verdict } : {},
+      ...task.attempt === undefined ? {} : { attempt: task.attempt },
+      ...task.takenOverBy === undefined ? {} : { takenOverBy: task.takenOverBy },
+      elapsedMs: Math.max(0, (TERMINAL_TASK_STATUSES.includes(task.status)
+        ? task.updatedAt
+        : Date.now()) - task.createdAt),
     })),
     messageCount: captainInbox.length
       + members.reduce((count, member) => count + member.unread, 0),

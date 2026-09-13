@@ -1023,3 +1023,34 @@
     font-size: 12px;
   }
 }
+
+/* v0.4 task badges: repair round / shadow takeover / verdict / elapsed time. */
+.taskBadge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 16px;
+  white-space: nowrap;
+  border: 1px solid var(--dsw-alias-border-l2, #3c3c3d);
+  color: var(--dsw-alias-label-tertiary, #7d828a);
+  vertical-align: 1px;
+}
+.taskBadge[data-badge='round'] {
+  border-color: var(--dsw-alias-state-warn-primary, #f59e0b);
+  color: var(--dsw-alias-state-warn-primary, #f59e0b);
+}
+.taskBadge[data-badge='taken'] {
+  border-color: var(--dsw-alias-state-business-primary, #679efe);
+  color: var(--dsw-alias-state-business-primary, #679efe);
+}
+.taskBadge[data-badge='pass'] {
+  border-color: var(--dsw-alias-state-success-primary, #22c55e);
+  color: var(--dsw-alias-state-success-primary, #22c55e);
+}
+.taskBadge[data-badge='needs_revision'],
+.taskBadge[data-badge='reject'] {
+  border-color: var(--dsw-alias-state-error-primary, #f25a5a);
+  color: var(--dsw-alias-state-error-primary, #f25a5a);
+}

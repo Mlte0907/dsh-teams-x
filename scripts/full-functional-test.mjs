@@ -835,7 +835,7 @@ try {
     check('L2', 'profile= 解析后 staged 创建成功', seeded.phase === 'staged', JSON.stringify(seeded.phase))
     const teamL = await state.readTeam(rootL, seeded.team_id)
     check('L3', '模板成员已 seed (researcher)', teamL.members.length === 1 && teamL.members[0].name === 'researcher' && teamL.members[0].model === 'MiniMax-M2.7', JSON.stringify(teamL.members.map((m) => `${m.name}/${m.model}`)))
-    check('L4', '模板任务已 seed (r1) 且指派保留', teamL.tasks.length === 1 && teamL.tasks[0].id === 'r1' && teamL.tasks[0].assignee === 'researcher', JSON.stringify(teamL.tasks.map((t) => t.id)))
+    check('L4', '模板任务已 seed 且指派保留（种子 id 归一化为 t1）', teamL.tasks.length === 1 && teamL.tasks[0].id === 't1' && teamL.tasks[0].assignee === 'researcher', JSON.stringify(teamL.tasks.map((t) => t.id)))
     check('L5', 'taskSeq 反映 seed 任务数', teamL.taskSeq === 1, String(teamL.taskSeq))
     // 成员数超 maxMembers(4) 的模板在 resolve 阶段拒绝
     const cfgL2 = { ...cfgL, profiles: { big: { members: Array.from({ length: 5 }, (_, i) => ({ name: `m${i}` })) } } }
@@ -1118,6 +1118,41 @@ try {
     if (prevLock === undefined) delete process.env['DSH_TEAMSX_FILE_LOCK']
     else process.env['DSH_TEAMSX_FILE_LOCK'] = prevLock
     check('R9', '恢复环境后回默认开启', state.crossProcessLockEnabled() === true)
+  }
+
+  // ══════════════════ S v0.4 内置模板/事件摘要/卡片折叠 ══════════════════
+  group('S v0.4 内置模板/事件摘要/卡片折叠')
+  {
+    const profilesMod = await import(join(root, 'lib', 'profiles.js'))
+    const inv = toolsMod.parseProfileInvocation ? undefined : undefined
+    const parsed = profilesMod.parseProfileInvocation('profile=research-review 调研 X')
+    check('S1', 'profile=research-review 调用解析', parsed.profile === 'research-review' && parsed.goal === '调研 X')
+    const normS = profilesMod.resolveTeamProfile(profilesMod.BUILT_IN_TEAM_PROFILES, 'research-review', 8)
+    check('S2', 'research-review 内置模板归一化（2 成员 2 种子任务）', normS.members.length === 2 && normS.tasks.length === 2)
+    const normS2 = profilesMod.resolveTeamProfile(profilesMod.BUILT_IN_TEAM_PROFILES, 'full-cycle', 8)
+    check('S3', 'full-cycle 三角色链（t1→t2→t3 依赖链）', normS2.members.length === 3 && JSON.stringify(normS2.tasks.map((t) => t.id)) === JSON.stringify(['t1', 't2', 't3']) && JSON.stringify(normS2.tasks[2].dependencies) === JSON.stringify(['t2']))
+    const normS3 = profilesMod.resolveTeamProfile(
+      { ...profilesMod.BUILT_IN_TEAM_PROFILES, 'research-review': { members: [{ name: 'solo' }] } },
+      'research-review', 8,
+    )
+    check('S4', '用户同名配置覆盖内置模板', normS3.members.length === 1 && normS3.members[0].name === 'solo')
+    const listing = profilesMod.formatProfilesForPrompt(undefined)
+    check('S5', '未配置用户 profiles 时 usage 提示仍列出内置模板', listing.includes('research-review') && listing.includes('implement-verify') && listing.includes('full-cycle'))
+    const long = 'x'.repeat(500)
+    const ev = events.messageEventContent(long)
+    check('S6', '超长消息事件截断并带提示', ev.length < 320 && ev.includes('截断'))
+    check('S7', '短消息事件原样保留', events.messageEventContent('short') === 'short')
+    // 卡片折叠 round / takenOverBy（含清空语义）
+    const cardS = await import(join(root, 'lib', 'client', 'card-state.js'))
+    let card = cardS.teamsXCardStart({ teamId: 'sv', name: 'sv', captainSessionId: 'cap' })
+    card = cardS.teamsXCardUpdate(card, 'teamsx/task-created', { teamId: 'sv', taskId: 't9', subject: 's' })
+    card = cardS.teamsXCardUpdate(card, 'teamsx/task-updated', { teamId: 'sv', taskId: 't9', status: 'in_progress', round: 2 })
+    const folded = card.tasks.find((t) => t.id === 't9')
+    check('S8', 'task-updated 折叠 round', folded?.round === 2)
+    card = cardS.teamsXCardUpdate(card, 'teamsx/task-updated', { teamId: 'sv', taskId: 't9', takenOverBy: 'captain' })
+    check('S9', 'task-updated 折叠 takenOverBy', card.tasks.find((t) => t.id === 't9')?.takenOverBy === 'captain')
+    card = cardS.teamsXCardUpdate(card, 'teamsx/task-updated', { teamId: 'sv', taskId: 't9', takenOverBy: null })
+    check('S10', 'takenOverBy 清空同步到卡片', card.tasks.find((t) => t.id === 't9')?.takenOverBy === undefined)
   }
 
 } finally {

@@ -25,6 +25,10 @@ export interface TeamsXCardTask {
   readonly subject: string
   readonly status: string
   readonly assignee?: string
+  /** Repair round (>=1 after the first automatic repair derivation). */
+  readonly round?: number
+  /** Shadow-takeover marker folded from task-updated events. */
+  readonly takenOverBy?: 'captain'
 }
 
 /** Card state == the keyed Chat payload (`ChatNodeDataMap['teamsx-card']`). */
@@ -144,6 +148,10 @@ export function teamsXCardUpdate(
       const taskId = stringField(data, 'taskId')
       const status = stringField(data, 'status')
       const assignee = stringField(data, 'assignee')
+      const round = typeof (data as Record<string, unknown> | null)?.round === 'number'
+        ? (data as Record<string, unknown>).round as number
+        : undefined
+      const takenOverBy = stringField(data, 'takenOverBy') === 'captain' ? 'captain' as const : undefined
       return {
         ...state,
         tasks: state.tasks.map((task) => task.id === taskId
@@ -151,6 +159,11 @@ export function teamsXCardUpdate(
               ...task,
               ...(status !== '' ? { status } : {}),
               ...(assignee !== '' ? { assignee } : {}),
+              ...(round !== undefined ? { round } : {}),
+              // 影子接管结束（takenOverBy 清空）时从卡片任务行同步移除标记
+              ...(data !== null && typeof data === 'object' && 'takenOverBy' in data
+                ? { takenOverBy }
+                : {}),
             }
           : task),
       }

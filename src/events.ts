@@ -73,3 +73,17 @@ export function captainSessionOf(
   const captain = ctx.agents.get(captainSessionId as SessionId)
   return captain?.session ?? fallback
 }
+
+/** Max message content carried in session events; the full text stays in the mailbox. */
+export const MESSAGE_EVENT_CONTENT_MAX_CHARS = 240
+
+/**
+ * Truncate message content for durable session-event payloads. The mailbox
+ * JSONL is the full-text store; the captain's session log only needs an
+ * audit excerpt, or every long member report doubles the session file.
+ */
+export function messageEventContent(content: string): string {
+  return content.length <= MESSAGE_EVENT_CONTENT_MAX_CHARS
+    ? content
+    : `${content.slice(0, MESSAGE_EVENT_CONTENT_MAX_CHARS)}…[截断 ${content.length - MESSAGE_EVENT_CONTENT_MAX_CHARS} 字，全文见邮箱]`
+}
