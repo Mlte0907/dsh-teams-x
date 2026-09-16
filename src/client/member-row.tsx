@@ -4,15 +4,23 @@
  * collapsed badge pulse). Unread badge and pause control are resident (never
  * hover-only); model/token/progress details live in a popover reachable via
  * hover, focus, and tap alike.
+ *
+ * Identity: the member's sigil glyph and ink color come from the印记系统
+ * (`member-identity`) — both derive from the member's own name/role strings,
+ * so they are stable across the roster, task assignees, and inbox senders.
+ * Activity: a live beat (host session subscription) overrides the polled
+ * activity when fresh, so start/stop flips land instantly (see live-activity).
  * @module dsh-teams-x/client/member-row
  */
 import { useState } from 'react'
-import type { ReactElement } from 'react'
+import type { CSSProperties, ReactElement } from 'react'
 import type { TeamActivitySnapshot } from '../snapshot-types.ts'
 import type { TeamsXLocaleKey } from './locale-keys.ts'
 import type { Translate } from './format.ts'
 import { formatTokens } from './format.ts'
 import { pauseMember } from './api.ts'
+import { beatActivity, type LiveBeat } from './live-activity.ts'
+import { memberInk, memberSigil } from './member-identity.ts'
 import css from './ActivityPanel.module.css'
 import {
   GlyphInfo,
@@ -29,19 +37,23 @@ export interface MemberRowProps {
   readonly t: Translate
   readonly openMember: (parentId: TeamActivitySnapshot['captainSessionId'], childId: string) => void
   readonly readOnly?: boolean
+  /** Subscription-sourced activity beat for this member (optional). */
+  readonly beat?: LiveBeat
 }
 
-export function MemberRow({ member, team, t, openMember, readOnly }: MemberRowProps): ReactElement {
+export function MemberRow({ member, team, t, openMember, readOnly, beat }: MemberRowProps): ReactElement {
   const [pausing, setPausing] = useState(false)
   const [pauseError, setPauseError] = useState<string | undefined>(undefined)
   const [infoOpen, setInfoOpen] = useState(false)
-  const roleKey = (member.role?.trim().toLowerCase() ?? '') as keyof typeof ROLE_ICONS
-  const RoleIcon = ROLE_ICONS[roleKey] as IconComponent | undefined
-  const stateKey = (member.activity === 'working' ? 'member.state.working'
-    : member.activity === 'idle' ? 'member.state.idle'
+  const sigil = memberSigil(member.name, member.role)
+  const Sigil = (sigil !== undefined ? ROLE_ICONS[sigil] : undefined) as IconComponent | undefined
+  const activity = beatActivity(member.activity, beat)
+  const stateKey = (activity === 'working' ? 'member.state.working'
+    : activity === 'idle' ? 'member.state.idle'
       : 'member.state.unknown') as TeamsXLocaleKey
   const openable = member.id !== ''
   const scale = Math.max(0, Math.min(100, member.progress)) / 100
+  const inkStyle = { '--tx-ink': memberInk(member.name) } as CSSProperties
 
   const pause = async (): Promise<void> => {
     setPausing(true)
@@ -56,14 +68,14 @@ export function MemberRow({ member, team, t, openMember, readOnly }: MemberRowPr
   }
 
   return (
-    <div className={css.memberCell} data-activity={member.activity}>
+    <div className={css.memberCell} data-activity={activity} style={inkStyle}>
       {member.unread > 0 && (
         <span className={css.memberUnread} title={t('member.unread', { count: member.unread })}>{member.unread}</span>
       )}
       <div className={css.memberCellTop}>
         <span className={css.memberIcon}>
-          {RoleIcon !== undefined
-            ? <RoleIcon size={16} decorative />
+          {Sigil !== undefined
+            ? <Sigil size={16} decorative />
             : <TeamsXLogo size={16} label={member.name} />}
         </span>
         <span className={css.memberName} title={member.name}>
@@ -80,7 +92,7 @@ export function MemberRow({ member, team, t, openMember, readOnly }: MemberRowPr
         </span>
       </div>
       <span className={css.memberState}>
-        <span className={css.memberStateDot} data-activity={member.activity} aria-hidden />
+        <span className={css.memberStateDot} data-activity={activity} aria-hidden />
         <span className={css.memberStateText}>{t(stateKey)}</span>
       </span>
       <span
@@ -108,7 +120,7 @@ export function MemberRow({ member, team, t, openMember, readOnly }: MemberRowPr
         >
           <GlyphInfo size={13} decorative />
         </button>
-        {!readOnly && member.activity === 'working' && (
+        {!readOnly && activity === 'working' && (
           <button
             type='button'
             className={css.memberPause}

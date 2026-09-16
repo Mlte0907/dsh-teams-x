@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.9.1 (2026-09-14)
+
+- 借鉴 dsh-flow（MIT）的精华并全部自研重写，零原实现痕迹；面板静默化 + 成员身份系统：
+  - **静默轮询（snapshot-compare）**：每拍快照先做结构等值比较，渲染等价的轮询零提交——面板不再每 4 秒无谓重渲染，悬浮/焦点/控件状态不被打扰；轮询失败时保留 last-known-good 列表并降级为一行"连接断开"状态条（panel.stale），红色错误盒只留给"完全无数据"；转圈只随手动刷新出现
+  - **收件箱 RichText（rich-text）**：队长收件箱消息体从单行纯文本升级为两行钳制的富版式（代码 span/围栏、加粗、列表）；渲染器只产出 React 元素、零 HTML 字符串，模型输出天然惰性（XSS-by-construction），无需净化器
+  - **成员印记系统（member-identity）**：名字 FNV-1a 哈希 → 六档身份墨水（--tx-mate-0..5，明暗双主题稳定、刻意避开状态色相），双语关键词桶（zh/en、特异→宽泛、首匹配）→ 角色徽记；同一成员在成员格徽记芯片、任务执行人点、收件箱发送者点处处同色同形；是视觉法则"禁止第四色相"唯一文档化例外（仅限最小标识面）
+  - **脉搏层（live-activity + client-runtime）**：订阅宿主 sessions 服务的成员会话 running 位——成员开跑/收工毫秒级反映（轮询 4s 兜底、30s TTL 交还权威）；宿主 face 由壳层 provideSessions 注入，不穿透四层 props；全程 feature-detect，旧宿主/冷子代理自动回退轮询
+  - **砍项**：成员转录"落点直达最新汇报"——实测宿主 ChatView 新开即落尾、重访恢复上次位置是宿主有意的续读设计，不重复造轮子
+  - **徽标呼吸（任务在跑 → 闪烁变色）**：触发条件为任务 claimed/in_progress（非成员活动位），徽标本体 1.6s 脉冲闪烁（肤色↔accent 变色 + 1.06 轻微缩放，无外圈光晕，循环预算仍全屏仅此 1 处）；点状指示改常亮；展开态与 reduced-motion 停动改常亮工作色；折叠徽标在本会话有团队后自动升 4s 快轮询，呼吸及时点亮
+  - **修复：徽标 token 作用域脱靶**（呼吸验证时揪出的 v0.9 潜伏 bug）：--tx-* token 只定义在 .panel/.panelWindow/.panelSheet 上，而徽标位于会话头部、不在任何面板根内部——其上所有 var(--tx-*) 未定义，颜色/字号静默退化为 currentColor/inherit，accent 状态点实际不可见，基于 var() 的动画声明整体失效。将 .badgeFab 纳入 token 作用域，徽标主题化全面生效
+  - **修复：队长收件箱"永远空白"**：面板取数用的是 readUnreadMailbox（仅未读）——队长按工作流及时读信后消息就从面板消失，健康运行中面板必然空白。改为读完整邮箱历史（最近 5 条、最新在前，已读未读都显示），未读徽标（messageCount）语义不变；真实会话验证：成员自动完成的任务通知与 teamsx_send_message 自由汇报均在已读后持续可见
+  - **修复：token 统计恒为 "--"（真实会话实测揪出三层断链，全部修复）**：
+    1. `stateOf` 返回 meter 内部折叠态 `{ totals, last }`（扁平桶在 `totals` 下），读取器按顶层扁平取值 → 永远 undefined
+    2. 该宿主版本公开 `Agent` 面只有 `id` 没有 `.session`，`agents.get(id).session` 第一道守卫即短路 → 改走宿主 `sessions` 注册表（`sessions.get(id)`，与 session-title 等宿主服务同款访问），agents 旧形态留作回退
+    3. cordis 访问控制：未声明 inject 的服务读取被拒（`cannot get property "sessionProjections" without inject`）→ 服务端 inject 声明补 `sessions` + `sessionProjections`（数组只授访问权，旧宿主缺服务时读取器优雅降级，不炸加载）
+    4. **持久化增强**：成员子会话 idle 即卸载，实时读数归零 → 任务完结捕获时把累计用量同步写入成员档案（team.json），快照装配"实时优先、持久兜底"，面板在成员空闲后仍显示最后一次累计值
+    5. **耗时瓦片改总耗时**：原语义"最长运行中任务耗时"在任务全部完成后归 "--"；改为任务总耗时（终态任务计最终时长、运行中任务计实时增长时长），标签同步改"任务总耗时/Total task time"
+    6. 真实会话验证（1 名成员 6 个任务）：运行中用量逐秒爬升（↑23.4k→26.1k）、完结任务任务级落盘（t5/t6 *U）、idle 后成员行与仪表行稳定显示 ↑26k ↓6.3k；U15 系列测试更新至宿主真实 shape 并补扁平兼容/空值/agents 回退三组断言（239 项全过）
+- 工程面：client-smoke 新增 4 段单测（印记稳定性/双语映射、等值闸门同值异象、RichText 渲染+惰性、脉搏权威模型），zh/en 132/132 对齐
 ## 0.9.0 (2026-09-13)
 
 - 面板 UI 全新重设计（「调度台」）：依据 docs/panel-redesign-v0.9-proposal.md（taste-skill + ui-ux-pro-max + emilkowalski_skills 三技能合流，双评审可行性审核 + 动效门禁全过）

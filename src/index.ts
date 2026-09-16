@@ -42,7 +42,11 @@ import { authenticatedWebRoutes, type BrowserRequestGate, type WebRouteHost } fr
 import { formatProfilesForPrompt, type TeamProfileConfig } from './profiles.ts'
 
 export const name = 'teams-x'
-export const inject = ['tools', 'llm', 'subagents', 'systemPrompt', 'agents']
+// 'sessions' + 'sessionProjections' power the best-effort token-usage read
+// (compat.readTokenUsage). In cordis the array only grants accessor
+// permission — a host without them fails the read at access time, which the
+// reader's try/catch degrades to "no usage" instead of failing the load.
+export const inject = ['tools', 'llm', 'subagents', 'systemPrompt', 'agents', 'sessions', 'sessionProjections']
 
 /** Plugin configuration. */
 export interface Config {

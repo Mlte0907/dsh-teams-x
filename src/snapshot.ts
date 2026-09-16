@@ -17,6 +17,7 @@ import {
   listArchivedTeamIds,
   readArchivedTeam,
   readTeam,
+  readMailbox,
   readUnreadMailbox,
   taskDepthsById,
   taskVisualState,
@@ -108,10 +109,13 @@ export async function assembleTeamSnapshot(
       unreadByMember.set(memberName, 0)
     }
   }
-  const readMemberUsage = (memberId: string) => {
-    if (options.historic === true || memberId === '') return {}
-    const usage = readTokenUsage(ctx, memberId)
-    return usage === undefined ? {} : { usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens } }
+  // Live read while the member's session is attached; a member that finished
+  // its task detaches, so the usage latched onto the durable member record at
+  // task terminal keeps the display alive (also for historic views).
+  const memberUsage = (member: { id: string; usage?: { inputTokens: number; outputTokens: number } }): { usage: { inputTokens: number; outputTokens: number } } | undefined => {
+    const live = options.historic === true || member.id === '' ? undefined : readTokenUsage(ctx, member.id)
+    const usage = live ?? member.usage
+    return usage === undefined ? undefined : { usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens } }
   }
   const members: TeamActivityMember[] = roster.map((member) => {
     const owned = tasks.filter((task) => task.assignee === member.name)
@@ -134,10 +138,14 @@ export async function assembleTeamSnapshot(
       total: owned.length,
       currentTask: currentTaskOf(member.name, tasks),
       unread: unreadByMember.get(member.name) ?? 0,
-      ...(options.historic === true ? {} : readMemberUsage(member.id)),
+      ...memberUsage(member),
     }
   })
-  const captainInbox = await readUnreadMailbox(stateRoot, state.id, CAPTAIN_KEY)
+  // 队长信箱面板取数：完整历史（最新在前），而非仅未读——队长的"已读"
+  // 代表它处理过，不代表观察者不需要看；只显示未读会让健康运行中的面板
+  // 永远空白。未读计数继续按未读语义（徽标）。
+  const captainMail = await readMailbox(stateRoot, state.id, CAPTAIN_KEY)
+  const captainUnread = await readUnreadMailbox(stateRoot, state.id, CAPTAIN_KEY)
   return {
     workspace,
     teamId: state.id,
@@ -180,9 +188,9 @@ export async function assembleTeamSnapshot(
         usage: { inputTokens: task.usage.inputTokens, outputTokens: task.usage.outputTokens },
       }),
     })),
-    messageCount: captainInbox.length
+    messageCount: captainUnread.length
       + members.reduce((count, member) => count + member.unread, 0),
-    captainInbox: captainInbox.slice(-5).map((message) => ({
+    captainInbox: captainMail.slice(-5).reverse().map((message) => ({
       from: message.from,
       content: message.content,
     })),

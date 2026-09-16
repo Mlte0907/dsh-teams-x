@@ -179,6 +179,12 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
   const workingCount = sessionTeams.reduce((count, team) => (
     count + team.members.filter((member) => member.activity === 'working').length
   ), 0)
+  // 徽标呼吸的触发器：任务在跑（claimed/in_progress），而非成员活动位——
+  // "团队创建后任务在跑"是这个信号的准确语义，也覆盖任务已派、成员尚未
+  // 上报活动的窗口。
+  const runningTasks = sessionTeams.reduce((count, team) => (
+    count + team.tasks.filter((task) => task.status === 'claimed' || task.status === 'in_progress').length
+  ), 0)
   const placement = usePanelPlacement(badgeRef, panelRef, expanded && !isNarrow)
 
   // Drop the panel on any pointer outside badge + panel, matching the
@@ -228,21 +234,24 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
   const badgeLabel = workingCount > 0
     ? `${translate('panel.aria')} (${workingCount})`
     : translate('panel.aria')
+  const badgeDetail = runningTasks > 0
+    ? `${translate('panel.title')} · ${translate('task.status.in_progress')} ${runningTasks}`
+    : workingCount > 0
+      ? `${translate('panel.title')} · ${t('member.state.working')} ${workingCount}`
+      : translate('panel.title')
   const badge = (
     <button
       type='button'
       ref={badgeRef}
       className={css.badgeFab}
       data-expanded={expanded === true || undefined}
+      data-busy={runningTasks > 0 || undefined}
       onClick={() => { setExpanded((value) => !value) }}
       aria-label={badgeLabel}
       aria-expanded={expanded === true || undefined}
-      title={workingCount > 0
-        ? `${translate('panel.title')} · ${t('member.state.working')} ${workingCount}`
-        : translate('panel.title')}
+      title={badgeDetail}
     >
-      <TeamsXLogo size={14} decorative />
-      <span className={css.badgeFabCount}>{sessionTeams.length}</span>
+      <TeamsXLogo size={16} decorative />
       {workingCount > 0 && <span className={css.badgeFabBusy} aria-hidden />}
     </button>
   )

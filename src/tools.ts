@@ -1805,7 +1805,14 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
         }
         if (TERMINAL_TASK_STATUSES.includes(task.status)) {
           const usage = readTokenUsage(ctx, caller.id)
-          if (usage !== undefined) task.usage = usage
+          if (usage !== undefined) {
+            task.usage = usage
+            // Latch the member's cumulative usage durably: the child session
+            // detaches once idle, so the snapshot's live read goes null — this
+            // record keeps the panel's token display alive between runs.
+            const member = fresh.members.find((entry) => entry.id === caller.id)
+            if (member !== undefined) member.usage = { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens }
+          }
         }
         if (args.verdict !== undefined) task.verdict = args.verdict as ReviewVerdict
         if (findings !== undefined) task.findings = findings

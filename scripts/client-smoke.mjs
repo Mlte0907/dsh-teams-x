@@ -271,4 +271,97 @@ if (hintHtml.trim() !== '') {
 }
 console.log('hint host SSR renders nothing when visible=false (PASS)')
 
+// ── 印记系统 (member-identity): stable ink + bilingual keyword sigils ──
+const { memberInkIndex, memberInk, memberSigil } = await import('../lib/client/member-identity.js')
+const inkA = memberInkIndex('worker-a')
+if (memberInkIndex('worker-a') !== inkA || inkA < 0 || inkA > 5) {
+  throw new Error(`memberInkIndex must be deterministic within 0..5, got ${inkA}`)
+}
+if (memberInk('worker-a') !== `var(--tx-mate-${inkA})`) {
+  throw new Error(`memberInk must map to its slot var, got ${memberInk('worker-a')}`)
+}
+for (const [name, role, expected] of [
+  ['张三', '工程师', 'engineer'],
+  ['Li', 'data analyst', 'data'],
+  ['老王', '测试与验收', 'qa'],
+  ['队长', '', 'lead'],
+  ['小明', '前端设计', 'designer'],
+  ['nobody', '神秘角色', undefined],
+]) {
+  const got = memberSigil(name, role)
+  if (got !== expected) throw new Error(`memberSigil(${name}, ${role}) = ${got}, want ${expected}`)
+}
+console.log('member-identity: deterministic ink + keyword sigils (PASS)')
+
+// ── 静默轮询闸门 (snapshot-compare): identical → true, changed → false ──
+const { sameTeamsSnapshots } = await import('../lib/client/snapshot-compare.js')
+if (!sameTeamsSnapshots([], [])) throw new Error('empty snapshots must compare equal')
+const teamBase = [{
+  workspace: 'w',
+  teamId: 'alpha',
+  name: 'alpha',
+  captainSessionId: 'cap',
+  phase: 'running',
+  members: [{
+    id: 'm1', name: 'worker', role: '工程师', provider: 'ds', model: 'm', status: 'active',
+    activity: 'working', progress: 50, done: 1, total: 2, currentTask: 't1', unread: 0,
+  }],
+  tasks: [{
+    id: 't1', subject: 'S', description: '', status: 'in_progress', state: 'running',
+    assignee: 'worker', model: 'm', dependencies: [], depth: 0,
+  }],
+  messageCount: 1,
+  captainInbox: [{ from: 'worker', content: '**done** `t1`' }],
+  operations: [],
+}]
+if (!sameTeamsSnapshots(teamBase, structuredClone(teamBase))) {
+  throw new Error('identical snapshots must compare equal')
+}
+const tickSame = structuredClone(teamBase)
+tickSame[0].members[0].progress = 50 // same value, new objects → still equal
+if (!sameTeamsSnapshots(teamBase, tickSame)) {
+  throw new Error('value-equal snapshots must compare equal (new object identities)')
+}
+const tickChanged = structuredClone(teamBase)
+tickChanged[0].captainInbox[0].content = 'new report'
+if (sameTeamsSnapshots(teamBase, tickChanged)) {
+  throw new Error('changed inbox content must not compare equal')
+}
+console.log('snapshot-compare: quiet-poll gate equal/changed (PASS)')
+
+// ── RichText: react-element rendering, no HTML strings, XSS inert ──
+const { RichText } = await import('../lib/client/rich-text.js')
+const mdHtml = renderToString(React.createElement(RichText, {
+  text: '汇报 **完成** `t1`\n- 第一条\n- 第二条\n```\nprint(1)\n```',
+}))
+if (!mdHtml.includes('<strong')) throw new Error('rich text: bold missing')
+if (!mdHtml.includes('<code')) throw new Error('rich text: code span missing')
+if (!mdHtml.includes('<ul>')) throw new Error('rich text: list missing')
+if (!mdHtml.includes('<pre>')) throw new Error('rich text: fence missing')
+const xssHtml = renderToString(React.createElement(RichText, {
+  text: '<img src=x onerror=alert(1)>',
+}))
+if (xssHtml.includes('<img')) throw new Error('rich text: raw HTML leaked into output')
+if (!xssHtml.includes('&lt;img')) throw new Error('rich text: hostile text not escaped')
+const blankHtml = renderToString(React.createElement(RichText, { text: '   \n  ' }))
+if (blankHtml !== '') throw new Error('rich text: blank input must render nothing')
+console.log('rich-text: element rendering + inert hostile content (PASS)')
+
+// ── 脉搏折叠 (beatActivity): fresh beat wins, stale beat hands back ──
+const { beatActivity } = await import('../lib/client/live-activity.js')
+const now = Date.now()
+if (beatActivity('idle', { running: true, seenAt: now }, now) !== 'working') {
+  throw new Error('fresh running beat must read working')
+}
+if (beatActivity('working', { running: false, seenAt: now }, now) !== 'idle') {
+  throw new Error('fresh idle beat must demote polled working to idle')
+}
+if (beatActivity('idle', { running: false, seenAt: now - 60_000 }, now) !== 'idle') {
+  throw new Error('stale beat must hand authority back to the poll')
+}
+if (beatActivity('idle', undefined, now) !== 'idle') {
+  throw new Error('no beat must keep polled activity')
+}
+console.log('live-activity: beat authority model (PASS)')
+
 console.log('client bundle smoke test: PASS (load + apply + render)')

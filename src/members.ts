@@ -102,7 +102,7 @@ export interface MemberSelectionRuntime {
     selection: MemberLlmSelection,
     operation: () => Promise<T>,
   ): Promise<T>
-  /** Uninstall the session-start/disposed listeners and every per-child install. */
+  /** Uninstall the created/disposed listeners and every per-child install. */
   dispose(): void
 }
 
@@ -291,32 +291,40 @@ export function installMemberSelectionRuntime(
 ): MemberSelectionRuntime {
   const pending = new Map<string, MemberLlmSelection>()
   // dsh >= 0.1.5 removed the plugin-facing continuable-setup hook. The
-  // supported replacement is `agent/session-start`: it fires after
-  // composition/setup (so the subagent descriptor is already in the session
-  // log) and before the loop starts, for both fresh children (`startup`) and
-  // cold-resumed ones (`resume`). `payload.agent.ctx` is the agent-scoped
-  // context `installModelSelection` needs.
+  // supported replacement is `agent/created` (host declaration:
+  // core/agent/src/runtime-types.ts — payload `{ agent, source, signal? }`): it
+  // fires after composition/setup (so the subagent descriptor is already in the
+  // session log) and before the loop starts. `source` carries the lifecycle
+  // distinction: `startup` for seeded creates, `resume` for persisted loads
+  // (also `clear` / `compact`). `payload.agent.ctx` is the agent-scoped context
+  // `installModelSelection` needs.
+  //
+  // NB: this subscription previously read `agent/session-start` — an event the
+  // host never declared. cordis validates event names only at the type level,
+  // so the listener was silently dead at runtime (member model routing and
+  // failure capture never armed) and only `tsc` reported it. Other host plugins
+  // (e.g. experimental/tool-agent-team) subscribe to `agent/created` likewise.
   const installed = new Map<string, () => void>()
   const disposeDisposed = ctx.on('agent/disposed', (payload) => {
     const id = payload?.agent?.id
     if (id !== undefined) installed.delete(id)
   })
-  const disposeSessionStart = ctx.on('agent/session-start', (payload) => {
+  const disposeSessionStart = ctx.on('agent/created', (payload) => {
     const child = payload?.agent
     const childCtx = child?.ctx
-    if (child === undefined || childCtx === undefined) return () => undefined
-    if (installed.has(child.id)) return () => undefined
+    if (child === undefined || childCtx === undefined) return undefined
+    if (installed.has(child.id)) return undefined
     const suffix = sessionOwnEvents(child.session)
     const descriptor = foldSubagentDescriptor(suffix)
     if (descriptor?.mode !== 'continuable' || !descriptor.label.startsWith(MEMBER_LABEL_PREFIX)) {
-      return () => undefined
+      return undefined
     }
 
     const parentSessionId = child.session.header.parentSession
-    if (parentSessionId === undefined) return () => undefined
+    if (parentSessionId === undefined) return undefined
     const identity = descriptor.label.slice(MEMBER_LABEL_PREFIX.length)
     const separator = identity.indexOf(':')
-    if (separator < 1 || separator === identity.length - 1) return () => undefined
+    if (separator < 1 || separator === identity.length - 1) return undefined
     const teamId = identity.slice(0, separator)
     const memberName = identity.slice(separator + 1)
     const workspace = child.session.header.cwd ?? process.cwd()
@@ -325,7 +333,7 @@ export function installMemberSelectionRuntime(
     let selection = pending.get(key)
     if (selection === undefined) {
       const team = readTeamSync(stateRoot, teamId)
-      if (team === undefined || team.captainSessionId !== parentSessionId) return () => undefined
+      if (team === undefined || team.captainSessionId !== parentSessionId) return undefined
       const durableMember = team.members.find((member) => member.name === memberName)
       selection = selectionFromMember(durableMember)
       if (selection !== undefined
@@ -335,7 +343,7 @@ export function installMemberSelectionRuntime(
         ctx.logger.warn(
           `teams-x: saved model route for member "${memberName}" does not match its subagent descriptor`,
         )
-        return () => undefined
+        return undefined
       }
     }
 
@@ -383,7 +391,7 @@ export function installMemberSelectionRuntime(
     })
     if (selection === undefined) {
       installed.set(child.id, disposeFailure)
-      return () => undefined
+      return undefined
     }
     const selectionRef = { current: modelSelection(selection), assembled: undefined as ModelSelection | undefined }
     const disposeSelection = installModelSelection(childCtx, selectionRef)
@@ -413,7 +421,7 @@ export function installMemberSelectionRuntime(
       disposeSelection()
       disposeFailure()
     })
-    return () => undefined
+    return undefined
   })
 
   return {

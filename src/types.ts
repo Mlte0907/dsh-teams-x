@@ -171,6 +171,8 @@ export interface TeamMember {
   fallbackActive?: boolean
   joinedAt: number
   status: MemberStatus
+  /** Last-known cumulative token usage, captured when this member completes a task. */
+  usage?: { inputTokens: number; outputTokens: number }
 }
 
 /** Configured second-choice route. */

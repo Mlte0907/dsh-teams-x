@@ -29,6 +29,7 @@ import { TeamsXHintHost } from './hint-host.tsx'
 import { teamsXCardDefinition } from './card-definition.tsx'
 import { TeamsXCardPanel } from './TeamsXCardPanel.tsx'
 import { requestTeamsXPanel } from './open-request.ts'
+import { provideSessions } from './client-runtime.ts'
 import { TEAMSX_LOCALE_NAMESPACE, en, zh } from './locales.ts'
 import type { TeamsXLocaleKey } from './locale-keys.ts'
 import type { TeamsXSessionNavigator } from './session-navigation.ts'
@@ -49,6 +50,9 @@ export function apply(ctx: ClientContext): void {
     'teams-x: dictionaries',
   )
   const sessions = ctx.sessions as ISessions & TeamsXSessionNavigator
+  // Hand the sessions face to the脉搏层 (live-activity) without threading it
+  // through four component hops; see client-runtime.
+  provideSessions(sessions)
   const openMember = (parentId: string, childId: string): void => {
     void import('./session-navigation.ts').then(({ openTeamsXMember }) => openTeamsXMember(sessions, parentId as SessionId, childId as SessionId))
       .catch((error: unknown) => {

@@ -6,8 +6,8 @@
  * preview. No card box: sections separate by hairline (DENSITY 8).
  * @module dsh-teams-x/client/team-card
  */
-import { useState } from 'react'
-import type { ReactElement } from 'react'
+import { useMemo, useState } from 'react'
+import type { CSSProperties, ReactElement } from 'react'
 import type { TeamActivitySnapshot } from '../snapshot-types.ts'
 import type { TeamsXLocaleKey } from './locale-keys.ts'
 import type { Translate } from './format.ts'
@@ -19,6 +19,9 @@ import { PlanReviewBar } from './plan-review.tsx'
 import { StagedPlanEditor } from './StagedPlanEditor.tsx'
 import { countTasks, ProgressRing } from './progress-ring.tsx'
 import { ActivityTicker } from './activity-ticker.tsx'
+import { useLiveBeats } from './live-activity.ts'
+import { memberInk } from './member-identity.ts'
+import { RichText } from './rich-text.tsx'
 import css from './ActivityPanel.module.css'
 import { GlyphClock, GlyphInbox, TeamsXLogo } from './icons.ts'
 
@@ -34,15 +37,19 @@ export interface TeamCardProps {
   readonly onSaved: () => void
 }
 
-/** Longest elapsed among running tasks, for the instrument row. */
-function runningElapsedMs(tasks: TeamActivitySnapshot['tasks']): number | undefined {
-  let max: number | undefined
+/**
+ * Total task elapsed time: every task contributes its wall-clock run time —
+ * terminal tasks their final duration, running tasks their growing current
+ * elapsed — so the tile always reads the team's accumulated working time
+ * instead of going blank the moment the last task completes.
+ */
+function totalElapsedMs(tasks: TeamActivitySnapshot['tasks']): number | undefined {
+  let total: number | undefined
   for (const task of tasks) {
-    if (task.status !== 'in_progress' && task.status !== 'claimed') continue
     if (typeof task.elapsedMs !== 'number') continue
-    max = max === undefined ? task.elapsedMs : Math.max(max, task.elapsedMs)
+    total = (total ?? 0) + task.elapsedMs
   }
-  return max
+  return total
 }
 
 interface TokenSum {
@@ -50,7 +57,12 @@ interface TokenSum {
   readonly output: number
 }
 
-/** Sum member token usage; undefined when no member reports usage. */
+/**
+ * Team-wide cumulative token total: each member owns a dedicated session, so
+ * summing the per-member cumulative usage never double-counts — it is the
+ * total the team has burned so far (live while a member runs, last captured
+ * total otherwise).
+ */
 function sumTokens(members: TeamActivitySnapshot['members']): TokenSum | undefined {
   let input: number | undefined
   let output: number | undefined
@@ -68,6 +80,10 @@ export function TeamCard({ team, t, openMember, readOnly, onSaved }: TeamCardPro
   const [stopError, setStopError] = useState<string | undefined>(undefined)
   const counts = countTasks(team.tasks)
   const phaseKey = (team.phase === 'staged' ? 'team.phase.staged' : 'team.phase.running') as TeamsXLocaleKey
+  // 脉搏层: subscribe to the members' host sessions once per card; beats
+  // override the polled activity in the roster until they go quiet.
+  const memberIds = useMemo(() => team.members.map((member) => member.id), [team.members])
+  const beats = useLiveBeats(memberIds)
 
   const stop = async (): Promise<void> => {
     setStopping(true)
@@ -82,7 +98,7 @@ export function TeamCard({ team, t, openMember, readOnly, onSaved }: TeamCardPro
     }
   }
 
-  const elapsed = runningElapsedMs(team.tasks)
+  const elapsed = totalElapsedMs(team.tasks)
   const tokens = sumTokens(team.members)
   const latestInbox = team.captainInbox[0]
 
@@ -166,7 +182,16 @@ export function TeamCard({ team, t, openMember, readOnly, onSaved }: TeamCardPro
       <div className={css.sectionCard}>
         {team.members.length > 0 ? (
           <div className={css.roster}>
-            {team.members.map((member) => <MemberRow key={member.id !== '' ? member.id : member.name} member={member} team={team} t={t} openMember={openMember} />)}
+            {team.members.map((member) => (
+              <MemberRow
+                key={member.id !== '' ? member.id : member.name}
+                member={member}
+                team={team}
+                t={t}
+                openMember={openMember}
+                beat={beats[member.id]}
+              />
+            ))}
           </div>
         ) : (
           <p className={css.inboxEmpty}>{t('team.members', { count: 0 })}</p>
@@ -211,8 +236,13 @@ export function TeamCard({ team, t, openMember, readOnly, onSaved }: TeamCardPro
           : (
             <>
               <span className={css.inboxPreview} title={latestInbox.content}>
-                <span className={css.inboxFrom}>{latestInbox.from}</span>
-                <span className={css.inboxContent}>{latestInbox.content}</span>
+                <span
+                  className={css.inboxFrom}
+                  style={{ '--tx-ink': memberInk(latestInbox.from) } as CSSProperties}
+                >
+                  {latestInbox.from}
+                </span>
+                <RichText text={latestInbox.content} className={css.inboxRich} />
               </span>
               {team.captainInbox.length > 1 && (
                 <span className={css.inboxMore}>{t('inbox.more', { count: team.captainInbox.length - 1 })}</span>

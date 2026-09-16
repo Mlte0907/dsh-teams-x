@@ -1283,17 +1283,31 @@ try {
     check('U14', 'operations 含契约修订记录', ops.some((o) => o.action === 'task-updated' && (o.detail ?? '').includes('contract revised')))
 
     // readTokenUsage：有投影 → 映射；无 → undefined
-    const fakeCtx = { sessionProjections: { stateOf: () => ({ uncachedInputTokens: 1200, outputTokens: 300, cacheReadTokens: 50 }) }, agents: { get: () => ({ session: {} }) } }
+    // (2026-09-15) 修 mock 漂移：宿主 stateOf 返回 meter 的内部折叠态
+    // { totals, last }（wire.view = state => state.totals）；且公开 Agent 面
+    // 只有 id 没有 .session，attached Session 必须取自宿主 sessions 注册表
+    // （sessions.get(id)，与 session-title 等宿主服务同款访问）。
+    const fakeCtx = { sessionProjections: { stateOf: () => ({ totals: { uncachedInputTokens: 1200, outputTokens: 300, cacheReadTokens: 50, cacheWriteTokens: 0 }, last: null }) }, sessions: { get: () => ({}) }, agents: { get: () => ({}) } }
     const usage = compat.readTokenUsage(fakeCtx, 's1')
-    check('U15', 'tokenUsage 投影映射（input=uncached）', usage !== undefined && usage.inputTokens === 1200 && usage.outputTokens === 300 && usage.cacheReadTokens === 50)
-    check('U16', '无 token-meter → undefined', compat.readTokenUsage({ agents: { get: () => undefined } }, 's1') === undefined)
+    check('U15', 'tokenUsage 投影映射（sessions 注册表 + 宿主嵌套 totals shape）', usage !== undefined && usage.inputTokens === 1200 && usage.outputTokens === 300 && usage.cacheReadTokens === 50)
+    check('U15b', '扁平 shape 兼容（宿主直接暴露 wire view 时）', (() => {
+      const flat = compat.readTokenUsage({ sessionProjections: { stateOf: () => ({ uncachedInputTokens: 40, outputTokens: 7 }) }, sessions: { get: () => ({}) } }, 's1')
+      return flat !== undefined && flat.inputTokens === 40 && flat.outputTokens === 7
+    })())
+    check('U15c', 'totals 缺失且顶层无 outputTokens → undefined', compat.readTokenUsage({ sessionProjections: { stateOf: () => ({ totals: null, last: null }) }, sessions: { get: () => ({}) } }, 's1') === undefined)
+    check('U16', '无 token-meter / 会话未挂载 → undefined', compat.readTokenUsage({ sessions: { get: () => undefined } }, 's1') === undefined)
+    check('U16b', '旧宿主 agents.get().session 回退仍可用', (() => {
+      const legacy = compat.readTokenUsage({ sessionProjections: { stateOf: () => ({ totals: { uncachedInputTokens: 9, outputTokens: 3, cacheReadTokens: 0, cacheWriteTokens: 0 }, last: null }) }, sessions: {}, agents: { get: () => ({ session: {} }) } }, 's1')
+      return legacy !== undefined && legacy.inputTokens === 9 && legacy.outputTokens === 3
+    })())
 
     // 修补 T 组遗留：把 U 组的 usage 捕获也验证一遍（契约修订后完结捕获 owner usage）
     const fakeCtx2 = {
-      sessionProjections: { stateOf: () => ({ uncachedInputTokens: 5000, outputTokens: 1500 }) },
+      sessionProjections: { stateOf: () => ({ totals: { uncachedInputTokens: 5000, outputTokens: 1500, cacheReadTokens: 0, cacheWriteTokens: 0 }, last: null }) },
+      sessions: { get: () => ({}) },
       agents: mU.ctx.agents,
     }
-    // 直接以 tools 内部同源读取器验证（compat.readTokenUsage + agents.get）
+    // 直接以 tools 内部同源读取器验证（compat.readTokenUsage + sessions.get）
     const captured = compat.readTokenUsage(fakeCtx2, 'child-950')
     check('U17', 'usage 捕获读取器工作', captured !== undefined && captured.outputTokens === 1500)
   }

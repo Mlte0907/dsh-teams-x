@@ -54,7 +54,7 @@ export interface TeamActivityMember {
   readonly total: number
   readonly currentTask: string
   readonly unread: number
-  /** Cumulative token usage of the member's live session (best-effort). */
+  /** Cumulative token usage: live while the member works, last task-terminal capture otherwise. */
   readonly usage?: { readonly inputTokens: number; readonly outputTokens: number }
 }
 
@@ -104,7 +104,9 @@ export interface TeamActivitySnapshot {
   readonly halted?: boolean
   readonly members: readonly TeamActivityMember[]
   readonly tasks: readonly TeamActivityTask[]
+  /** Unread count across the captain's mailbox and every member's mailbox. */
   readonly messageCount: number
+  /** Recent captain-inbox history, newest first (read and unread alike). */
   readonly captainInbox: readonly TeamActivityMessage[]
   /** Recent structured operations (newest first) for the timeline view. */
   readonly operations: readonly TeamActivityOperation[]

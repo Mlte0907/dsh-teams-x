@@ -126,27 +126,46 @@ export interface SessionTokenUsage {
 
 /**
  * Read one session's cumulative token-usage projection. Returns undefined
- * when the token-meter service is not mounted or the session is not live —
- * cost display is best-effort by design.
+ * when the token-meter service is not mounted or the session is not attached
+ * — cost display is best-effort by design.
+ *
+ * Session access: the host's `sessions` registry is the canonical attached
+ * Session source (`sessions.get(id)`, the same face every host-side projection
+ * consumer uses). The public `Agent` face carries only `id` — it has no
+ * `.session` to reach, so the agents registry cannot answer here; an older
+ * host that exposed it is tolerated as a fallback.
+ *
+ * Shape note: `stateOf` hands back the meter's internal fold state
+ * (`{ totals, last }`); the flat buckets live under `totals` — that is what
+ * the definition's wire view projects. A flat top-level shape is tolerated
+ * so a host that exposes the wire view directly keeps working.
  */
 export function readTokenUsage(
-  ctx: { sessionProjections?: unknown; agents?: unknown },
+  ctx: { sessionProjections?: unknown; sessions?: unknown; agents?: unknown },
   sessionId: string,
 ): SessionTokenUsage | undefined {
   try {
     const projections = (ctx as { sessionProjections?: { stateOf?: (session: unknown, key: string) => unknown } }).sessionProjections
+    const sessions = (ctx as { sessions?: { get?: (id: string) => unknown } }).sessions
     const agents = (ctx as { agents?: { get?: (id: string) => { session?: unknown } | undefined } }).agents
-    const session = agents?.get?.(sessionId)?.session
+    const session = sessions?.get?.(sessionId) ?? agents?.get?.(sessionId)?.session
     if (projections?.stateOf === undefined || session === undefined) return undefined
     const state = projections.stateOf(session, 'tokenUsage') as
-      | { uncachedInputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number }
+      | {
+          totals?: { uncachedInputTokens?: number; outputTokens?: number; cacheReadTokens?: number; cacheWriteTokens?: number }
+          uncachedInputTokens?: number
+          outputTokens?: number
+          cacheReadTokens?: number
+          cacheWriteTokens?: number
+        }
       | undefined
-    if (state === undefined || typeof state.outputTokens !== 'number') return undefined
+    const buckets = state?.totals ?? state
+    if (buckets === undefined || typeof buckets.outputTokens !== 'number') return undefined
     return {
-      inputTokens: state.uncachedInputTokens ?? 0,
-      outputTokens: state.outputTokens,
-      ...(typeof state.cacheReadTokens === 'number' && state.cacheReadTokens > 0 ? { cacheReadTokens: state.cacheReadTokens } : {}),
-      ...(typeof state.cacheWriteTokens === 'number' && state.cacheWriteTokens > 0 ? { cacheWriteTokens: state.cacheWriteTokens } : {}),
+      inputTokens: buckets.uncachedInputTokens ?? 0,
+      outputTokens: buckets.outputTokens,
+      ...(typeof buckets.cacheReadTokens === 'number' && buckets.cacheReadTokens > 0 ? { cacheReadTokens: buckets.cacheReadTokens } : {}),
+      ...(typeof buckets.cacheWriteTokens === 'number' && buckets.cacheWriteTokens > 0 ? { cacheWriteTokens: buckets.cacheWriteTokens } : {}),
     }
   } catch {
     return undefined

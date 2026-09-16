@@ -5,11 +5,12 @@
  * subject on hover.
  * @module dsh-teams-x/client/task-row
  */
-import type { ReactElement } from 'react'
+import type { CSSProperties, ReactElement } from 'react'
 import type { TeamActivitySnapshot } from '../snapshot-types.ts'
 import type { TeamsXLocaleKey } from './locale-keys.ts'
 import type { Translate } from './format.ts'
 import { formatElapsed } from './format.ts'
+import { memberInk } from './member-identity.ts'
 import css from './ActivityPanel.module.css'
 import { VISUAL_STATE_ICONS, type IconComponent } from './icons.ts'
 
@@ -22,9 +23,13 @@ export function TaskRow({ task, t }: TaskRowProps): ReactElement {
   const StateIcon = VISUAL_STATE_ICONS[task.state] as IconComponent | undefined
   const statusKey = `task.status.${task.status}` as TeamsXLocaleKey
   const sourceDep = task.dependencies[0] ?? ''
-  const assignee = task.assignee === '' ? t('task.assignee.shared')
+  const shared = task.assignee === ''
+  const assignee = shared ? t('task.assignee.shared')
     : task.assignee === 'captain' ? t('task.assignee.captain')
       : task.assignee
+  // 执行人印记: the same ink the roster and inbox use for this member, so
+  // "who owns this" reads by color before the name resolves.
+  const inkStyle = shared ? undefined : { '--tx-ink': memberInk(task.assignee) } as CSSProperties
   return (
     <>
       <div
@@ -71,7 +76,7 @@ export function TaskRow({ task, t }: TaskRowProps): ReactElement {
             </span>
           )}
         </span>
-        <span className={css.taskCardAssignee}>{assignee}</span>
+        <span className={css.taskCardAssignee} style={inkStyle}>{assignee}</span>
         {typeof task.elapsedMs === 'number' && (
           <span className={css.taskCardElapsed} title={t('task.elapsedTitle')}>{formatElapsed(task.elapsedMs)}</span>
         )}
