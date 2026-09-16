@@ -90,6 +90,8 @@ export interface TeamActivityTask {
 export interface TeamActivityMessage {
   readonly from: string
   readonly content: string
+  /** Delivery time (epoch ms); the timeline stream interleaves on it. */
+  readonly ts?: number
 }
 
 /** The full panel payload for one team. */

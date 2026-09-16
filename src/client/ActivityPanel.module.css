@@ -1,10 +1,13 @@
 /**
  * TeamsX activity panel — component stylesheet.
  *
- * v0.9 视觉系统（「调度台」）：三旋钮 VARIANCE 5 / MOTION 4 / DENSITY 8。
+ * v0.10 视觉系统（「时间线叙事流」· 方向 C 定稿）：三旋钮 VARIANCE 5 / MOTION 4 / DENSITY 8。
  * 三层 token（DSW 语义别名 → --tx-* 组件层 → 规则），规则只引用 --tx-*。
- * DENSITY 8：无卡片盒、hairline 分节、数字全部等宽。循环动画全屏仅 1 处
- * （折叠徽标的工作中呼吸变色，展开即停改常亮）。动效曲线与时长对齐 Emil 框架。
+ * 信息架构：头部仪表（环/耗时/token 双条）+ 状态分段条 + 「正在发生」钉条
+ * + 成员印记条 + 任务水位线 + 过滤 chips + 单列统一时间流（任务卡锚定在
+ * 最新事件处）。无模块分块盒：hairline 与流轨做分隔（DENSITY 8）。
+ * 循环动画预算：全屏 2 处 —— 折叠徽标的工作中呼吸（宿主层）+ 正在发生
+ * 条的运行点脉冲；reduced-motion 一律停动改常亮。
  * @module dsh-teams-x/client/ActivityPanel.module.css
  */
 
@@ -12,8 +15,7 @@
    1. Component tokens（--tx-*：面板唯一的取值入口）
    ──────────────────────────────────────────────────────────── */
 /* 作用域注意：会话头部的折叠徽标（.badgeFab）不在任何面板根内部，但同样
-   消费这组 token——必须把它加进作用域，否则徽标上所有 var(--tx-*) 落空，
-   颜色/字号/动画时长全部静默退化为继承值或初始值（呼吸动画直接失效）。 */
+   消费这组 token——必须把它加进作用域，否则徽标上所有 var(--tx-*) 落空。 */
 .panel,
 .panelWindow,
 .panelSheet,
@@ -37,7 +39,8 @@
      成员一处稳定可辨的颜色；它只允许出现在最小标识面（徽记芯片、执行人
      点、发送者点），永不用于控件、表面或文本大面。六档固定中调色值同时
      扛住宿主明暗两套主题，且刻意避开 ok/warn/bad 三个状态色相——身份
-     永不冒充状态。 */
+     永不冒充状态。另有一处刻意借用：队长接管/修复轮次 chip 使用
+     --tx-mate-1（青绿），语义是"队长亲历"而非状态，与身份墨水同源。 */
   --tx-accent: var(--dsw-alias-state-business-primary, #679efe);
   --tx-ok: var(--dsw-alias-state-success-primary, #22c55e);
   --tx-warn: var(--dsw-alias-state-warn-primary, #f59e0b);
@@ -68,7 +71,7 @@
   --tx-sp-6: 16px;
 
   /* 圆角文档化规则：容器 12 / 内件 8 / 控件 6 / 签 4；
-     唯一例外 = 胶囊阶段签（999px + corner-shape: round 成对声明） */
+     唯一例外 = 胶囊（999px）成对声明 corner-shape: round */
   --tx-r-container: 12px;
   --tx-r-inner: 8px;
   --tx-r-ctl: 6px;
@@ -100,8 +103,7 @@
   width: 100%;
   min-width: 0;
 }
-/* 右侧栏页签宿主：面板内容与两边留白（对齐 context 插件的面板边距）；
-   全屏等超宽容器下面板收在一列可读宽度内并居中（自适应宽度） */
+/* 右侧栏页签宿主：面板内容与两边留白；超宽容器下收在一列可读宽度内居中 */
 .panelTab {
   width: 100%;
   max-width: 760px;
@@ -111,7 +113,7 @@
 }
 
 /* 徽标 = 机器人图标本体：无描边、无计数、无底框（用户定向）。工作状态
-   只通过图标的墨色闪烁（text-2↔accent）表达，点击目标仍是 26px 方位。 */
+   只通过图标的墨色闪烁（text-2↔accent）表达。 */
 .badgeFab {
   position: relative;
   display: inline-flex;
@@ -152,10 +154,8 @@
   corner-shape: round;
   background: var(--tx-accent);
 }
-/* 徽标呼吸（循环动画预算：全屏仅此 1 处常驻循环件）。任务在跑
-   （claimed/in_progress）时机器人图标本体变色闪烁——墨色
-   text-2↔accent 由同一条 1.6s 曲线承担；徽标无描边无计数无底框。展开态、
-   reduced-motion 一律停动改常亮工作色（状态不丢，运动预算不破）。 */
+/* 徽标呼吸（循环动画预算 1/2：宿主层）。任务在跑时图标本体变色闪烁；
+   展开态、reduced-motion 一律停动改常亮工作色。 */
 .badgeFab[data-busy] {
   animation: teamsx-badge-breath 1.6s var(--tx-ease-inout) infinite;
 }
@@ -166,13 +166,14 @@
   color: var(--tx-accent);
 }
 
-/* 桌面下拉窗：从徽标原点展开（Emil: origin-aware，永不用 scale(0)） */
+/* 桌面下拉窗：v0.10 放宽至 560px —— 单列时间流需要叙事宽度（交接文档 §3
+   PR3 形态适配），锚定/避让逻辑不变（ActivityPanel.tsx usePanelPlacement）。 */
 .panelWindow {
   position: fixed;
   z-index: 60;
-  width: 420px;
+  width: 560px;
   max-width: calc(100vw - 16px);
-  max-height: min(72vh, 640px);
+  max-height: min(78vh, 720px);
   overflow-y: auto;
   padding: var(--tx-sp-5);
   border: 1px solid var(--tx-hairline);
@@ -186,7 +187,6 @@
   from { opacity: 0; transform: scale(0.97) translateY(-4px); }
   to { opacity: 1; transform: scale(1) translateY(0); }
 }
-/* 收起 = 系统响应：直接卸载，无出场动画（Emil #9：系统响应要快） */
 
 /* 移动端底板：从底部滑入 */
 .panelSheet {
@@ -210,7 +210,7 @@
 }
 
 /* ────────────────────────────────────────────────────────────
-   3. 面板头部：标题 + 视图切换 + 刷新
+   3. 面板头部：标题 + 视图切换 + 刷新（三宿主共用的壳层控制）
    ──────────────────────────────────────────────────────────── */
 .panelHeader {
   display: flex;
@@ -281,7 +281,7 @@
 }
 
 /* ────────────────────────────────────────────────────────────
-   4. 全局面板状态：错误 / 空
+   4. 全局面板状态：错误 / 空 / 静默降级
    ──────────────────────────────────────────────────────────── */
 .emptyState {
   display: flex;
@@ -321,7 +321,7 @@
 .retryButton:hover { background: var(--tx-surface-hover); color: var(--tx-text-1); }
 
 /* 静默轮询的降级提示：数据没断，只是"这一拍没送到"。last-known-good 继续
-   在屏，一行安静的状态条 + 重试，不升红色告警（那是 errorBox 的事）。 */
+   在屏，一行安静的状态条 + 重试，不升红色告警。 */
 .staleNote {
   display: flex;
   align-items: center;
@@ -345,14 +345,14 @@
 }
 .staleRetry:hover { text-decoration: underline; }
 
-/* 团队列表：去卡片盒（DENSITY 8），多团队用加重 hairline 分隔 */
+/* 团队列表：无卡片盒（DENSITY 8），多团队用加重 hairline 分隔 */
 .teamList {
   display: flex;
   flex-direction: column;
 }
 
 /* ────────────────────────────────────────────────────────────
-   5. 团队卡：身份行 + 仪表行 + 通道条 + 轨道 + 脉冲 + 信箱
+   5. 团队卡：身份行 + 头部仪表（环/耗时/token 双条）
    ──────────────────────────────────────────────────────────── */
 .teamCard {
   display: flex;
@@ -366,7 +366,6 @@
 }
 .teamCard[data-halted] { opacity: 0.62; }
 
-/* 身份行：徽形 + 名称/目标 + 阶段签 + 停止 */
 .teamHeader {
   display: flex;
   align-items: flex-start;
@@ -444,42 +443,91 @@
   border-color: color-mix(in srgb, var(--tx-bad) 40%, transparent);
 }
 
-/* 仪表行：进度环 + 大数字 + 耗时 + token（全等宽） */
-.instrumentRow {
+/* 头部仪表行：完成度环 + 累计耗时 + token 双条（全等宽数字） */
+.headStats {
   display: flex;
   align-items: center;
-  gap: var(--tx-sp-4);
+  flex-wrap: wrap;
+  gap: var(--tx-sp-5);
   padding: 0 var(--tx-sp-1);
-  color: var(--tx-text-2);
 }
-.instrumentMain {
+.headStat {
   display: inline-flex;
   align-items: center;
-  gap: var(--tx-sp-2);
+  gap: 7px;
+  min-width: 0;
 }
-.instrumentNum {
+.headStatIcon { display: inline-flex; color: var(--tx-text-3); }
+/* 值/标签两行小柱：数值等宽、标签弱化 */
+.sl {
+  display: inline-flex;
+  flex-direction: column;
+  line-height: 1.2;
+  min-width: 0;
+}
+.sl b {
   font-family: var(--tx-mono);
   font-variant-numeric: tabular-nums;
+  font-size: var(--tx-fs-sm);
   font-weight: 600;
   color: var(--tx-text-1);
+  white-space: nowrap;
 }
-.instrumentBlock {
+.sl i {
+  font-style: normal;
+  font-size: 10px;
+  color: var(--tx-text-3);
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+/* 32px 完成度环：环心读数 done/total */
+.headRing {
+  position: relative;
   display: inline-flex;
-  align-items: center;
-  gap: 4px;
+  width: 32px;
+  height: 32px;
+  flex: none;
+}
+.headRing[data-mini] { width: 26px; height: 26px; }
+.headRingValue {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
   font-family: var(--tx-mono);
   font-variant-numeric: tabular-nums;
-  font-size: var(--tx-fs-2xs);
-  color: var(--tx-text-3);
+  font-size: 8.5px;
+  font-weight: 700;
+  color: var(--tx-text-1);
 }
-.instrumentBlock svg { color: var(--tx-text-3); flex-shrink: 0; }
-.instrumentSpacer { flex: 1; }
 .ringSvg { flex-shrink: 0; display: block; }
 .ringSeg {
   fill: none;
   transition: stroke-dasharray var(--tx-dur-viz) var(--tx-ease-out),
     stroke var(--tx-dur-ctl) var(--tx-ease-out);
 }
+/* token 双条：输入/输出各一根，归一化到两者较大值 */
+.tokviz {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 46px;
+  flex: none;
+}
+.tokviz i {
+  display: block;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--tx-viz-track);
+  overflow: hidden;
+}
+.tokviz i b {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: var(--tx-accent);
+}
+.tokviz i[data-out] b { background: var(--tx-viz-edge); }
 
 /* 停止确认 */
 .stopConfirmBox {
@@ -510,19 +558,802 @@
 }
 
 /* ────────────────────────────────────────────────────────────
-   6. Staged 计划审核条 + 编辑器
+   6. 任务状态分段条 + 图例
+   ──────────────────────────────────────────────────────────── */
+.segbar { min-width: 0; }
+.segtrack {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--tx-viz-track);
+}
+.segtrack i { display: block; height: 100%; }
+.segtrack i + i { box-shadow: -1px 0 0 var(--dsw-alias-bg-base, #1c1d21); }
+.segtrack i[data-seg='done'] { background: var(--tx-ok); }
+.segtrack i[data-seg='running'] { background: var(--tx-accent); }
+.segtrack i[data-seg='failed'] { background: var(--tx-bad); }
+.segtrack i[data-seg='blocked'] {
+  background: repeating-linear-gradient(
+    135deg,
+    var(--tx-warn) 0 5px,
+    color-mix(in srgb, var(--tx-warn) 55%, transparent) 5px 10px
+  );
+}
+.seglegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tx-sp-3) var(--tx-sp-4);
+  margin-top: var(--tx-sp-2);
+  font-size: var(--tx-fs-2xs);
+  color: var(--tx-text-2);
+}
+.seglegend .lg { display: inline-flex; align-items: center; gap: 5px; }
+.seglegend .sw {
+  width: 9px;
+  height: 9px;
+  border-radius: 3px;
+  flex: none;
+  background: var(--tx-viz-track);
+}
+.seglegend .sw[data-seg='done'] { background: var(--tx-ok); }
+.seglegend .sw[data-seg='running'] { background: var(--tx-accent); }
+.seglegend .sw[data-seg='failed'] { background: var(--tx-bad); }
+.seglegend .sw[data-seg='blocked'] { background: var(--tx-warn); }
+.seglegend b {
+  font-family: var(--tx-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--tx-text-1);
+}
+
+/* ────────────────────────────────────────────────────────────
+   7. 「正在发生」钉条：工作中成员（迷你环）+ 无人驱动的运行任务
+   ──────────────────────────────────────────────────────────── */
+.nowLabel {
+  display: flex;
+  align-items: center;
+  gap: var(--tx-sp-4);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--tx-text-3);
+}
+.nowLabel::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--tx-viz-track);
+}
+.nowbar {
+  display: flex;
+  gap: var(--tx-sp-2);
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+.nowbar::-webkit-scrollbar { display: none; }
+.nowitem {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 11px 4px 5px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--tx-surface-hover);
+  border: 1px solid var(--tx-viz-track);
+  font-size: var(--tx-fs-xs);
+  color: var(--tx-text-2);
+  max-width: 260px;
+  cursor: pointer;
+  transition: border-color var(--tx-dur-ctl) var(--tx-ease-out),
+    background-color var(--tx-dur-ctl) var(--tx-ease-out);
+}
+.nowitem:hover { border-color: var(--tx-accent); }
+.nowitem[data-active] {
+  border-color: var(--tx-accent);
+  background: color-mix(in srgb, var(--tx-accent) 10%, transparent);
+}
+.nowName {
+  color: var(--tx-ink, var(--tx-text-1));
+  font-weight: 600;
+  flex: none;
+}
+.nowTaskId {
+  font-family: var(--tx-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--tx-text-1);
+  font-weight: 600;
+  flex: none;
+}
+.nowText {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+/* 运行点脉冲（循环动画预算 2/2：面板内唯一常驻循环件）。 */
+.nowDot {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--tx-accent);
+  flex: none;
+  animation: teamsx-now-pulse 1.8s ease-in-out infinite;
+}
+@keyframes teamsx-now-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* ────────────────────────────────────────────────────────────
+   8. 成员印记条：全员芯片（会话跳转/未读/详情/暂停收进浮层）
+   ──────────────────────────────────────────────────────────── */
+.memberStrip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tx-sp-2);
+}
+.memberChip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 9px 2px 3px;
+  border: 1px solid var(--tx-viz-track);
+  border-radius: 999px;
+  corner-shape: round;
+  background: transparent;
+  min-width: 0;
+  transition: background-color var(--tx-dur-ctl) var(--tx-ease-out),
+    border-color var(--tx-dur-ctl) var(--tx-ease-out);
+}
+.memberChip:hover {
+  background: var(--tx-surface-hover);
+  border-color: var(--tx-hairline);
+}
+.memberChipInfo {
+  border: none;
+  background: none;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  border-radius: var(--tx-r-tag);
+  flex: none;
+}
+.memberChipIcon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--tx-r-tag);
+  color: var(--tx-ink, var(--tx-accent));
+  background: color-mix(in srgb, var(--tx-ink, var(--tx-accent)) 12%, transparent);
+  flex: none;
+}
+/* 工作中芯片：名字侧一枚静态工作点（形/色双通道，零循环） */
+.memberChip[data-activity='working'] .memberChipName::after {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 4px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--tx-accent);
+  vertical-align: 1px;
+}
+.memberChipName {
+  border: none;
+  background: none;
+  padding: 0;
+  font-size: var(--tx-fs-2xs);
+  color: var(--tx-text-2);
+  font-family: inherit;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+button.memberChipName { cursor: pointer; transition: color var(--tx-dur-ctl) var(--tx-ease-out); }
+button.memberChipName:hover { color: var(--tx-accent); }
+.memberChipUnread {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  background: var(--tx-bad);
+  color: var(--tx-text-on-accent);
+  border-radius: 999px;
+  corner-shape: round;
+  font-size: 9px;
+  line-height: 1;
+  min-width: 14px;
+  height: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  font-family: var(--tx-mono);
+  font-variant-numeric: tabular-nums;
+  z-index: 1;
+}
+/* 正在发生条内的未读：随流内联，不悬出 */
+.memberChipUnread[data-inline] {
+  position: static;
+  flex: none;
+}
+/* 成员详情浮层：hover/焦点/点击三通道（触屏与键盘可达） */
+.memberChipPop {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  min-width: 172px;
+  padding: var(--tx-sp-2) var(--tx-sp-3);
+  border: 1px solid var(--tx-hairline);
+  border-radius: var(--tx-r-inner);
+  background: var(--dsw-alias-bg-base, #1c1d21);
+  box-shadow: 0 8px 20px color-mix(in srgb, #000 24%, transparent);
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  font-size: var(--tx-fs-2xs);
+  color: var(--tx-text-2);
+}
+/* 4px 悬空隙的桥，防止鼠标从芯片移入浮层时瞬间丢失 hover */
+.memberChipPop::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: -5px;
+  height: 5px;
+}
+.memberChipPop[data-open],
+.memberChip:focus-within .memberChipPop {
+  display: flex;
+}
+.memberChipPause {
+  margin-top: 2px;
+  border: 1px solid var(--tx-hairline);
+  border-radius: var(--tx-r-tag);
+  background: transparent;
+  color: var(--tx-text-2);
+  font-size: var(--tx-fs-2xs);
+  padding: 2px 6px;
+  cursor: pointer;
+  text-align: left;
+  transition: color var(--tx-dur-ctl) var(--tx-ease-out),
+    border-color var(--tx-dur-ctl) var(--tx-ease-out);
+}
+.memberChipPause:hover { color: var(--tx-warn); border-color: color-mix(in srgb, var(--tx-warn) 40%, transparent); }
+.memberChipPause:disabled { opacity: 0.5; cursor: default; }
+
+/* ────────────────────────────────────────────────────────────
+   9. 任务水位线：全任务一行迷你块，点击在流中定位
+   ──────────────────────────────────────────────────────────── */
+.wmbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--tx-sp-1) 3px;
+  align-items: center;
+}
+.wmLabel {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--tx-text-3);
+  margin-right: 4px;
+}
+.wm {
+  width: 34px;
+  height: 22px;
+  border-radius: var(--tx-r-ctl);
+  border: 1px solid var(--tx-viz-track);
+  background: transparent;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  font-family: var(--tx-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 9px;
+  color: var(--tx-text-2);
+  cursor: pointer;
+  transition: border-color var(--tx-dur-ctl) var(--tx-ease-out),
+    box-shadow var(--tx-dur-ctl) var(--tx-ease-out);
+}
+.wm:hover { border-color: var(--tx-accent); }
+.wmFill {
+  width: 20px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--tx-viz-track);
+  overflow: hidden;
+}
+.wmFill i { display: block; height: 100%; border-radius: 2px; background: var(--tx-text-3); }
+.wm[data-state='done'] .wmFill i { background: var(--tx-ok); }
+.wm[data-state='running'] .wmFill i { background: var(--tx-accent); }
+.wm[data-state='blocked'] .wmFill i { background: var(--tx-warn); }
+.wm[data-state='failed'] .wmFill i { background: var(--tx-bad); }
+
+/* ────────────────────────────────────────────────────────────
+   10. 过滤 chips（吸附在滚动容器顶）
+   ──────────────────────────────────────────────────────────── */
+.filters {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: var(--tx-sp-2);
+  padding: var(--tx-sp-2) 0;
+  margin-top: calc(-1 * var(--tx-sp-2));
+  background: color-mix(in srgb, var(--dsw-alias-bg-base, #1c1d21) 92%, transparent);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid var(--tx-viz-track);
+}
+.filterChip {
+  padding: 2px 11px;
+  border: none;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--tx-surface-hover);
+  color: var(--tx-text-2);
+  font-size: var(--tx-fs-xs);
+  cursor: pointer;
+  transition: background-color var(--tx-dur-ctl) var(--tx-ease-out),
+    color var(--tx-dur-ctl) var(--tx-ease-out);
+}
+.filterChip:hover { background: var(--tx-hairline); color: var(--tx-text-1); }
+.filterChip[aria-pressed='true'] {
+  background: color-mix(in srgb, var(--tx-accent) 16%, transparent);
+  color: var(--tx-accent);
+  font-weight: 600;
+}
+.filterUnread {
+  margin-left: 4px;
+  font-family: var(--tx-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.filterCount {
+  margin-left: auto;
+  font-size: var(--tx-fs-2xs);
+  color: var(--tx-text-3);
+  font-family: var(--tx-mono);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+/* ────────────────────────────────────────────────────────────
+   11. 统一时间流：左轨 + 时间列 + 事件行（任务卡锚定最新事件）
+   ──────────────────────────────────────────────────────────── */
+.stream {
+  position: relative;
+  padding: var(--tx-sp-1) 2px var(--tx-sp-3) 88px;
+  min-width: 0;
+}
+.stream::before {
+  content: '';
+  position: absolute;
+  left: 40px;
+  top: 12px;
+  bottom: 10px;
+  width: 2px;
+  border-radius: 1px;
+  background: linear-gradient(to bottom, var(--tx-hairline), var(--tx-viz-track) 60%, transparent);
+}
+.streamRow {
+  position: relative;
+  padding: 7px 0 7px 24px;
+  font-size: var(--tx-fs-sm);
+  min-width: 0;
+}
+.streamRow + .streamRow {
+  border-top: 1px dashed color-mix(in srgb, var(--tx-viz-track) 60%, transparent);
+}
+/* 轨点：按事件类型形/色编码 */
+.streamRow::before {
+  content: '';
+  position: absolute;
+  left: -52px;
+  top: 14px;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--tx-text-3);
+  border: 2px solid var(--tx-text-3);
+}
+.streamRow[data-kind='task']::before {
+  background: var(--tx-accent);
+  border-color: var(--tx-accent);
+}
+.streamRow[data-kind='inbox']::before {
+  background: var(--tx-accent);
+  border-color: var(--tx-accent);
+}
+.streamRow[data-kind='ok']::before {
+  background: var(--tx-ok);
+  border-color: var(--tx-ok);
+}
+.streamRow[data-kind='bad']::before {
+  background: color-mix(in srgb, var(--tx-bad) 30%, transparent);
+  border-color: var(--tx-bad);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tx-bad) 14%, transparent);
+}
+/* 飞行态（派发/认领/上报）= 空心点 */
+.streamRow[data-flight]::before {
+  background: transparent;
+}
+.streamRow[data-kind='task'][data-flight]::before {
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--tx-accent) 12%, transparent);
+}
+.streamTime {
+  position: absolute;
+  left: -86px;
+  top: 10px;
+  width: 36px;
+  text-align: right;
+  font-family: var(--tx-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--tx-fs-2xs);
+  color: var(--tx-text-3);
+}
+.streamBody { min-width: 0; }
+.streamWho {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+  color: var(--tx-text-2);
+  max-width: 110px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  vertical-align: middle;
+}
+/* 发送者/执行者身份点：印记墨水的最小标识面 */
+.streamWho::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--tx-ink, var(--tx-viz-edge));
+  flex: none;
+}
+.streamWhoBtn {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--tx-text-2);
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color var(--tx-dur-ctl) var(--tx-ease-out);
+}
+.streamWhoBtn:hover { color: var(--tx-accent); }
+.streamText { color: var(--tx-text-2); }
+.streamText b { color: var(--tx-text-1); font-weight: 600; }
+.streamTaskId {
+  font-family: var(--tx-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--tx-text-1);
+  margin-left: 4px;
+}
+.streamDetail {
+  color: var(--tx-text-3);
+  margin-left: 6px;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.streamMerge {
+  font-family: var(--tx-mono);
+  color: var(--tx-accent);
+  margin-left: 4px;
+}
+.streamEmpty {
+  margin: 0;
+  padding: var(--tx-sp-3) 0;
+  font-size: var(--tx-fs-2xs);
+  color: var(--tx-text-3);
+}
+/* 日分隔 */
+.daysep {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0 2px;
+  font-size: var(--tx-fs-2xs);
+  color: var(--tx-text-3);
+}
+.daysep::before,
+.daysep::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--tx-viz-track);
+}
+/* 汇拢更早 */
+.older {
+  display: block;
+  width: 100%;
+  text-align: center;
+  padding: 8px;
+  margin-top: 4px;
+  font-size: var(--tx-fs-2xs);
+  color: var(--tx-text-3);
+  border: 1px dashed var(--tx-viz-track);
+  border-radius: var(--tx-r-ctl);
+  background: var(--tx-surface-hover);
+  cursor: pointer;
+  transition: color var(--tx-dur-ctl) var(--tx-ease-out),
+    border-color var(--tx-dur-ctl) var(--tx-ease-out);
+}
+.older:hover { color: var(--tx-accent); border-color: var(--tx-accent); }
+/* 拆解中骨架（与流同构的预铺轨道，静态形无 shimmer） */
+.skeletonRow {
+  display: block;
+  height: 10px;
+  border-radius: var(--tx-r-tag);
+  background: var(--tx-surface-hover);
+}
+
+/* ── 任务状态卡（锚定在最新事件处） ─────────────────────────── */
+.tcard {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 9px 12px;
+  border: 1px solid var(--tx-hairline);
+  border-radius: var(--tx-r-inner);
+  background: var(--tx-surface);
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: box-shadow var(--tx-dur-ctl) var(--tx-ease-out),
+    border-color var(--tx-dur-ctl) var(--tx-ease-out);
+}
+.tcard:hover {
+  border-color: var(--tx-accent);
+  box-shadow: 0 1px 2px color-mix(in srgb, #000 6%, transparent),
+    0 8px 24px color-mix(in srgb, #000 8%, transparent);
+}
+.tcard[data-state='completed'] { background: color-mix(in srgb, var(--tx-ok) 7%, transparent); }
+.tcard[data-state='running'] { background: color-mix(in srgb, var(--tx-accent) 8%, transparent); }
+.tcard[data-state='blocked'] { background: color-mix(in srgb, var(--tx-warn) 7%, transparent); }
+.tcard[data-state='failed'] { background: color-mix(in srgb, var(--tx-bad) 7%, transparent); }
+.tcard[data-state='cancelled'] { opacity: 0.55; }
+.tcTop {
+  display: flex;
+  align-items: center;
+  gap: var(--tx-sp-2);
+  font-size: var(--tx-fs-2xs);
+  color: var(--tx-text-3);
+}
+.tcId {
+  font-family: var(--tx-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--tx-text-2);
+}
+.tcElapsed {
+  margin-left: auto;
+  font-family: var(--tx-mono);
+  font-variant-numeric: tabular-nums;
+}
+.tcSubj {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  font-size: var(--tx-fs-sm);
+  font-weight: 600;
+  color: var(--tx-text-1);
+  margin: 3px 0 5px;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+.tcFoot {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--tx-sp-2);
+  font-size: var(--tx-fs-2xs);
+  color: var(--tx-text-2);
+}
+.tcStatus {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.tcStatus svg { flex: none; }
+.tcAssignee {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* 执行人身份点：印记墨水最小标识面 */
+.tcAssignee::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--tx-ink, var(--tx-viz-edge));
+  flex: none;
+}
+/* 注记小签：等宽 9.5px；裁决签按语义染色 */
+.chip {
+  font-size: 9.5px;
+  padding: 0 6px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: var(--tx-surface-hover);
+  color: var(--tx-text-2);
+  font-family: var(--tx-mono);
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+  flex: none;
+}
+.chip[data-verdict='pass'] { background: color-mix(in srgb, var(--tx-ok) 14%, transparent); color: var(--tx-ok); }
+.chip[data-verdict='needs_revision'] { background: color-mix(in srgb, var(--tx-warn) 14%, transparent); color: var(--tx-warn); }
+.chip[data-verdict='reject'] { background: color-mix(in srgb, var(--tx-bad) 14%, transparent); color: var(--tx-bad); }
+.chipRepair,
+.chipTaken {
+  font-size: 9.5px;
+  padding: 0 6px;
+  border-radius: 999px;
+  corner-shape: round;
+  background: color-mix(in srgb, var(--tx-mate-1) 14%, transparent);
+  color: var(--tx-mate-1);
+  font-family: var(--tx-mono);
+  font-variant-numeric: tabular-nums;
+  line-height: 16px;
+  flex: none;
+}
+/* 进度上报火花线：次数的形状化（无百分比数据，不做假进度条） */
+.trend {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 14px;
+  margin-top: 7px;
+}
+.trend i {
+  width: 4px;
+  border-radius: 1px 1px 0 0;
+  background: var(--tx-accent);
+  opacity: 0.45;
+}
+.trend i:last-child { opacity: 1; }
+
+/* ── 流内消息块 ─────────────────────────────────────────────── */
+.msg {
+  display: block;
+  margin-top: 6px;
+  padding: 8px 11px;
+  border-radius: var(--tx-r-tag);
+  border-left: 3px solid var(--tx-accent);
+  background: color-mix(in srgb, var(--tx-accent) 8%, transparent);
+  font-size: var(--tx-fs-xs);
+  color: var(--tx-text-2);
+  line-height: 1.5;
+  min-width: 0;
+}
+.msgTag {
+  display: inline-block;
+  font-size: var(--tx-fs-2xs);
+  color: var(--tx-text-3);
+  margin-bottom: 2px;
+}
+.msgRich {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  font-size: var(--tx-fs-xs);
+  color: var(--tx-text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.msgRich p { margin: 0; }
+.msgRich p + p, .msgRich pre, .msgRich ul, .msgRich ol { margin-top: 2px; }
+.msgRich code {
+  font-family: var(--tx-mono);
+  background: color-mix(in srgb, var(--tx-text-3) 14%, transparent);
+  border-radius: var(--tx-r-tag);
+  padding: 0 3px;
+}
+.msgRich pre {
+  background: color-mix(in srgb, var(--tx-text-3) 10%, transparent);
+  border-radius: var(--tx-r-tag);
+  padding: 3px 5px;
+  overflow-x: auto;
+}
+.msgRich pre code { background: transparent; padding: 0; }
+.msgRich ul, .msgRich ol { margin: 0; padding-left: 14px; }
+.msgRich strong { color: var(--tx-text-1); font-weight: 600; }
+
+/* ── 任务详情浮层（fixed，锚定触发卡；点外/Esc/滚动关闭） ───── */
+.taskPop {
+  position: fixed;
+  z-index: 70;
+  width: 264px;
+  padding: var(--tx-sp-3) var(--tx-sp-4);
+  border: 1px solid var(--tx-hairline);
+  border-radius: var(--tx-r-inner);
+  background: var(--dsw-alias-bg-base, #1c1d21);
+  box-shadow: 0 2px 6px color-mix(in srgb, #000 8%, transparent),
+    0 16px 40px color-mix(in srgb, #000 28%, transparent);
+}
+.taskPop h4 {
+  margin: 0 0 2px;
+  font-size: var(--tx-fs-sm);
+  color: var(--tx-text-1);
+  line-height: 1.35;
+}
+.taskPopMeta {
+  font-family: var(--tx-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--tx-fs-2xs);
+  color: var(--tx-text-3);
+  margin-bottom: var(--tx-sp-2);
+}
+.taskPopDesc {
+  margin: 0 0 var(--tx-sp-2);
+  font-size: var(--tx-fs-xs);
+  color: var(--tx-text-2);
+  line-height: 1.5;
+}
+.taskPopRow {
+  display: flex;
+  gap: var(--tx-sp-3);
+  font-size: var(--tx-fs-2xs);
+  padding: 3px 0;
+  border-top: 1px dashed var(--tx-viz-track);
+  color: var(--tx-text-2);
+  min-width: 0;
+}
+.taskPopRow > span:last-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+}
+.taskPopKey { color: var(--tx-text-3); flex: none; width: 58px; }
+
+/* ────────────────────────────────────────────────────────────
+   12. Staged 计划审核条 + 编辑器
    ──────────────────────────────────────────────────────────── */
 .planBar {
   display: flex;
-  flex-direction: column;
-  gap: var(--tx-sp-2);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--tx-sp-2) var(--tx-sp-3);
   padding: var(--tx-sp-3) var(--tx-sp-4);
   border: 1px solid color-mix(in srgb, var(--tx-accent) 30%, transparent);
   border-radius: var(--tx-r-inner);
   background: color-mix(in srgb, var(--tx-accent) 8%, transparent);
 }
-.planBarText { margin: 0; font-size: var(--tx-fs-xs); color: var(--tx-text-2); }
-.planError { margin: 0; font-size: var(--tx-fs-2xs); color: var(--tx-bad); }
+.planBarText { margin: 0; font-size: var(--tx-fs-xs); color: var(--tx-text-2); flex: 1; min-width: 140px; }
+.planError { margin: 0; font-size: var(--tx-fs-2xs); color: var(--tx-bad); width: 100%; }
 .planActions { display: flex; flex-wrap: wrap; gap: var(--tx-sp-2); }
 .planApprove,
 .planChat,
@@ -660,604 +1491,13 @@
 .planEditorEmpty { margin: 0; font-size: var(--tx-fs-2xs); color: var(--tx-text-3); }
 
 /* ────────────────────────────────────────────────────────────
-   7. 成员通道条（channel strips）
-   ──────────────────────────────────────────────────────────── */
-.roster {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(88px, 1fr));
-  gap: var(--tx-sp-2);
-}
-.memberCell {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: var(--tx-sp-1);
-  padding: var(--tx-sp-2) var(--tx-sp-2) 0;
-  border: 1px solid var(--tx-viz-track);
-  border-radius: var(--tx-r-inner);
-  min-width: 0;
-  transition: background-color var(--tx-dur-ctl) var(--tx-ease-out),
-    border-color var(--tx-dur-ctl) var(--tx-ease-out);
-}
-.memberCell:hover {
-  background: var(--tx-surface-hover);
-  border-color: var(--tx-hairline);
-}
-.memberCellTop {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  min-width: 0;
-}
-.memberIcon {
-  display: inline-flex;
-  color: var(--tx-ink, var(--tx-accent));
-  background: color-mix(in srgb, var(--tx-ink, var(--tx-accent)) 12%, transparent);
-  border-radius: var(--tx-r-tag);
-  padding: 2px;
-  flex-shrink: 0;
-}
-.memberName {
-  font-size: var(--tx-fs-xs);
-  font-weight: 500;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  flex: 1;
-  min-width: 0;
-}
-.memberLink {
-  border: none;
-  background: transparent;
-  color: var(--tx-text-1);
-  font: inherit;
-  font-weight: 500;
-  padding: 0;
-  cursor: pointer;
-  text-decoration: none;
-  border-bottom: 1px dotted transparent;
-  transition: color var(--tx-dur-ctl) var(--tx-ease-out),
-    border-color var(--tx-dur-ctl) var(--tx-ease-out);
-}
-.memberLink:hover {
-  color: var(--tx-accent);
-  border-bottom-color: var(--tx-accent);
-}
-.memberUnread {
-  position: absolute;
-  top: -5px;
-  right: -5px;
-  background: var(--tx-bad);
-  color: var(--tx-text-on-accent);
-  border-radius: 999px;
-  corner-shape: round;
-  font-size: var(--tx-fs-2xs);
-  line-height: 1;
-  min-width: 15px;
-  height: 15px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 4px;
-  font-variant-numeric: tabular-nums;
-  z-index: 1;
-}
-/* 活动状态件：静态形（形/色双通道编码，零循环动画） */
-.memberState {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: var(--tx-fs-2xs);
-  color: var(--tx-text-2);
-  min-width: 0;
-}
-.memberStateDot {
-  width: 6px;
-  height: 6px;
-  border-radius: 2px;
-  flex-shrink: 0;
-  background: var(--tx-text-3);
-}
-.memberStateDot[data-activity='working'] { background: var(--tx-accent); }
-.memberStateDot[data-activity='idle'] {
-  background: transparent;
-  border: 1.2px solid var(--tx-text-3);
-}
-.memberStateDot[data-activity='unknown'] { opacity: 0.45; }
-.memberStateText {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* 底部进度轨：满格宽 2px，scaleX 过渡（transform-only，无布局属性动画） */
-.memberTrack {
-  display: block;
-  height: 2px;
-  margin: 2px calc(-1 * var(--tx-sp-2)) 0;
-  border-radius: 0 0 var(--tx-r-inner) var(--tx-r-inner);
-  background: var(--tx-viz-track);
-  overflow: hidden;
-}
-.memberTrackFill {
-  display: block;
-  height: 100%;
-  background: var(--tx-accent);
-  transform-origin: left center;
-  transition: transform var(--tx-dur-viz) var(--tx-ease-out);
-}
-.memberTrackFill[data-done] { background: var(--tx-ok); }
-.memberCellActions {
-  position: absolute;
-  right: 3px;
-  bottom: 6px;
-  display: inline-flex;
-}
-.memberPause {
-  border: none;
-  background: transparent;
-  color: var(--tx-text-3);
-  width: 18px;
-  height: 18px;
-  border-radius: var(--tx-r-tag);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  padding: 0;
-  transition: background-color var(--tx-dur-ctl) var(--tx-ease-out),
-    color var(--tx-dur-ctl) var(--tx-ease-out);
-}
-.memberPause:hover {
-  background: var(--tx-surface-hover);
-  color: var(--tx-warn);
-}
-.memberPause:disabled { opacity: 0.5; cursor: default; }
-/* 信息钮 + 悬停/焦点/点击三通道浮层（触屏与键盘可达，评审 M3） */
-.memberInfo {
-  border: none;
-  background: transparent;
-  color: var(--tx-text-3);
-  width: 16px;
-  height: 16px;
-  border-radius: var(--tx-r-tag);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  padding: 0;
-  transition: color var(--tx-dur-ctl) var(--tx-ease-out);
-}
-.memberInfo:hover { color: var(--tx-text-1); }
-.memberPopover {
-  position: absolute;
-  left: 0;
-  top: calc(100% + 4px);
-  z-index: 5;
-  min-width: 168px;
-  padding: var(--tx-sp-2) var(--tx-sp-3);
-  border: 1px solid var(--tx-hairline);
-  border-radius: var(--tx-r-inner);
-  background: var(--dsw-alias-bg-base, #1c1d21);
-  box-shadow: 0 8px 20px color-mix(in srgb, #000 24%, transparent);
-  display: none;
-  flex-direction: column;
-  gap: 2px;
-  font-size: var(--tx-fs-2xs);
-  color: var(--tx-text-2);
-}
-.memberCell:hover .memberPopover,
-.memberCell:focus-within .memberPopover,
-.memberPopover[data-open] { display: flex; }
-.memberPopoverRow {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--tx-sp-3);
-  font-family: var(--tx-mono);
-  font-variant-numeric: tabular-nums;
-}
-.memberPopoverKey { color: var(--tx-text-3); flex-shrink: 0; }
-.memberPopoverVal { color: var(--tx-text-1); text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; }
-.memberPopoverErr { color: var(--tx-bad); }
-
-/* ────────────────────────────────────────────────────────────
-   8. 任务区：单节标签（兼视图切换）+ 行注记
-   ──────────────────────────────────────────────────────────── */
-.dag { position: relative; display: flex; flex-direction: column; }
-.dagEmpty {
-  display: flex;
-  flex-direction: column;
-  gap: var(--tx-sp-2);
-  padding: var(--tx-sp-3) var(--tx-sp-2) var(--tx-sp-2);
-}
-.dagEmptyText {
-  margin: 0 0 2px;
-  font-size: var(--tx-fs-xs);
-  color: var(--tx-text-3);
-}
-/* 空态预铺轨道：静态形（无 shimmer 循环，动画预算让给徽标呼吸） */
-.skeletonRow {
-  display: block;
-  height: 10px;
-  border-radius: var(--tx-r-tag);
-  background: var(--tx-surface-hover);
-}
-
-/* ── 任务条形卡片：状态左轨 + 状态染色面，hover/focus 出详情浮层 ── */
-.taskCard {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: var(--tx-sp-2);
-  min-height: 26px;
-  margin-bottom: var(--tx-sp-1);
-  padding: var(--tx-sp-1) var(--tx-sp-2) var(--tx-sp-1) var(--tx-sp-4);
-  border-radius: var(--tx-r-ctl);
-  background: var(--tx-surface-hover);
-  transition: background-color var(--tx-dur-ctl) var(--tx-ease-out),
-    filter var(--tx-dur-ctl) var(--tx-ease-out);
-}
-.taskCard:hover { filter: brightness(0.985); }
-.taskCard[data-state='completed'] { background: color-mix(in srgb, var(--tx-ok) 10%, transparent); }
-.taskCard[data-state='running'] { background: color-mix(in srgb, var(--tx-accent) 12%, transparent); }
-.taskCard[data-state='blocked'] { background: color-mix(in srgb, var(--tx-warn) 10%, transparent); }
-.taskCard[data-state='failed'] { background: color-mix(in srgb, var(--tx-bad) 10%, transparent); }
-.taskCard[data-state='cancelled'] { background: transparent; opacity: 0.55; }
-
-.taskCardRail {
-  position: absolute;
-  left: 0;
-  top: 5px;
-  bottom: 5px;
-  width: 3px;
-  border-radius: 999px;
-  corner-shape: round;
-  background: var(--tx-viz-track);
-}
-.taskCard[data-state='completed'] .taskCardRail { background: var(--tx-ok); }
-.taskCard[data-state='running'] .taskCardRail { background: var(--tx-accent); }
-.taskCard[data-state='blocked'] .taskCardRail { background: var(--tx-warn); }
-.taskCard[data-state='failed'] .taskCardRail { background: var(--tx-bad); }
-
-.taskCardIcon { display: inline-flex; color: var(--tx-text-3); flex-shrink: 0; }
-.taskCard[data-state='completed'] .taskCardIcon { color: var(--tx-ok); }
-.taskCard[data-state='failed'] .taskCardIcon { color: var(--tx-bad); }
-.taskCard[data-state='running'] .taskCardIcon { color: var(--tx-accent); }
-.taskCard[data-state='blocked'] .taskCardIcon { color: var(--tx-warn); }
-
-
-.taskCard .taskNoteRow {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  display: block;
-  text-overflow: ellipsis;
-}
-.taskCard .taskNote { margin-right: var(--tx-sp-2); }
-.taskCardAssignee {
-  font-size: var(--tx-fs-2xs);
-  color: var(--tx-text-2);
-  flex-shrink: 0;
-  max-width: 88px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-/* 执行人身份点：成员印记墨水的最小标识面（见 tokens 块的文档化例外）。 */
-.taskCardAssignee::before {
-  content: '';
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--tx-ink, var(--tx-viz-edge));
-  flex-shrink: 0;
-}
-.taskCardElapsed {
-  font-family: var(--tx-mono);
-  font-size: var(--tx-fs-2xs);
-  color: var(--tx-text-3);
-  font-variant-numeric: tabular-nums;
-  flex-shrink: 0;
-  min-width: 34px;
-  text-align: right;
-}
-
-/* ────────────────────────────────────────────────────────────
-   9. 活动脉冲带（ticker）
-   ──────────────────────────────────────────────────────────── */
-.ticker {
-  display: flex;
-  flex-direction: column;
-}
-.tickerToggle {
-  border: none;
-  background: transparent;
-  padding: 0;
-  color: var(--tx-text-3);
-  font-size: var(--tx-fs-2xs);
-  cursor: pointer;
-  display: flex;
-  align-items: baseline;
-  gap: var(--tx-sp-2);
-  min-width: 0;
-  text-align: left;
-  font-variant-numeric: tabular-nums;
-  transition: color var(--tx-dur-ctl) var(--tx-ease-out);
-}
-.tickerToggle:hover { color: var(--tx-text-2); }
-.tickerCaret {
-  flex-shrink: 0;
-  font-size: 9px;
-  transition: transform var(--tx-dur-ctl) var(--tx-ease-out);
-}
-.tickerCaret[data-open] { transform: rotate(90deg); }
-.tickerTime {
-  flex-shrink: 0;
-  font-family: var(--tx-mono);
-}
-.tickerActor {
-  flex-shrink: 0;
-  color: var(--tx-text-2);
-  font-weight: 500;
-}
-.tickerText {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.tickerMerge {
-  font-family: var(--tx-mono);
-  color: var(--tx-accent);
-  flex-shrink: 0;
-}
-.tickerBody {
-  position: relative;
-  margin-top: var(--tx-sp-2);
-  padding-left: var(--tx-sp-4);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  max-height: 200px;
-  overflow-y: auto;
-}
-.tickerBody::before {
-  content: '';
-  position: absolute;
-  left: 3px;
-  top: 6px;
-  bottom: 6px;
-  width: 1px;
-  background: var(--tx-viz-track);
-}
-.tickerAxisRow {
-  position: relative;
-  display: flex;
-  gap: var(--tx-sp-2);
-  align-items: baseline;
-  font-size: var(--tx-fs-2xs);
-  color: var(--tx-text-3);
-  padding: 1px 4px;
-  border-radius: var(--tx-r-tag);
-  font-variant-numeric: tabular-nums;
-  transition: background-color var(--tx-dur-ctl) var(--tx-ease-out);
-}
-.tickerAxisRow:hover { background: var(--tx-surface-hover); }
-.tickerAxisRow::before {
-  content: '';
-  position: absolute;
-  left: calc(-1 * var(--tx-sp-4) + 1px);
-  top: 50%;
-  width: 5px;
-  height: 5px;
-  transform: translateY(-50%);
-  border-radius: 2px;
-  background: var(--tx-text-3);
-}
-/* 进行中的派发/认领/进度 = 空心点，其余实心 */
-.tickerAxisRow[data-flight]::before {
-  background: transparent;
-  border: 1.2px solid var(--tx-text-3);
-}
-.tickerDetail {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: 0.8;
-}
-
-/* ────────────────────────────────────────────────────────────
-   10. 收件箱（单行预览）
-   ──────────────────────────────────────────────────────────── */
-.inbox {
-  border-top: 1px solid var(--tx-viz-track);
-  padding-top: var(--tx-sp-3);
-  display: flex;
-  flex-direction: column;
-  gap: var(--tx-sp-1);
-}
-.inboxHead {
-  display: flex;
-  align-items: center;
-  gap: var(--tx-sp-2);
-  font-size: var(--tx-fs-2xs);
-  color: var(--tx-text-3);
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--tx-viz-track);
-}
-.inboxHead svg { flex-shrink: 0; }
-.inboxCount {
-  font-family: var(--tx-mono);
-  font-variant-numeric: tabular-nums;
-  color: var(--tx-text-2);
-}
-.inboxUnreadBadge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0 5px;
-  border-radius: var(--tx-r-tag);
-  border: 1px solid color-mix(in srgb, var(--tx-bad) 45%, transparent);
-  color: var(--tx-bad);
-  font-family: var(--tx-mono);
-  font-variant-numeric: tabular-nums;
-  font-size: var(--tx-fs-2xs);
-  line-height: 14px;
-}
-.inboxPreview {
-  display: flex;
-  gap: var(--tx-sp-3);
-  font-size: var(--tx-fs-2xs);
-  padding: var(--tx-sp-1) var(--tx-sp-2);
-  border-radius: var(--tx-r-tag);
-  min-width: 0;
-  transition: background-color var(--tx-dur-ctl) var(--tx-ease-out);
-}
-.inboxPreview:hover { background: var(--tx-surface-hover); }
-.inboxFrom {
-  flex-shrink: 0;
-  font-weight: 500;
-  color: var(--tx-text-2);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-}
-/* 发送者身份点：与执行人点同一套印记墨水（见 tokens 块的文档化例外）。 */
-.inboxFrom::before {
-  content: '';
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--tx-ink, var(--tx-viz-edge));
-  flex-shrink: 0;
-}
-/* 收件箱消息体：RichText 版式（React 元素，无 HTML 字符串）。两行钳制，
-   完整内容走原生 title。嵌套块一律压到消息条的小字号档。 */
-.inboxRich {
-  min-width: 0;
-  flex: 1;
-  font-size: var(--tx-fs-2xs);
-  color: var(--tx-text-3);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-.inboxRich p { margin: 0; }
-.inboxRich p + p, .inboxRich pre, .inboxRich ul, .inboxRich ol { margin-top: 2px; }
-.inboxRich code {
-  font-family: var(--tx-mono);
-  background: color-mix(in srgb, var(--tx-text-3) 14%, transparent);
-  border-radius: var(--tx-r-tag);
-  padding: 0 3px;
-}
-.inboxRich pre {
-  background: color-mix(in srgb, var(--tx-text-3) 10%, transparent);
-  border-radius: var(--tx-r-tag);
-  padding: 3px 5px;
-  overflow: hidden;
-}
-.inboxRich pre code { background: transparent; padding: 0; }
-.inboxRich ul, .inboxRich ol { margin: 0; padding-left: 14px; }
-.inboxRich strong { color: var(--tx-text-2); font-weight: 600; }
-.inboxContent {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  color: var(--tx-text-3);
-}
-.inboxEmpty { margin: 0; font-size: var(--tx-fs-2xs); color: var(--tx-text-3); }
-.inboxMore {
-  font-size: var(--tx-fs-2xs);
-  color: var(--tx-text-3);
-  padding: 0 var(--tx-sp-2);
-  font-family: var(--tx-mono);
-  font-variant-numeric: tabular-nums;
-}
-
-/* ────────────────────────────────────────────────────────────
-   10b. 大区块卡片（对齐 context 插件的分区卡片语言）
-   ──────────────────────────────────────────────────────────── */
-.sectionCard {
-  border: 1px solid var(--tx-viz-track);
-  border-radius: var(--tx-r-container);
-  padding: var(--tx-sp-4);
-  display: flex;
-  flex-direction: column;
-  gap: var(--tx-sp-3);
-}
-.sectionCardHead {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: var(--tx-sp-3);
-  padding-bottom: 6px;
-  border-bottom: 1px solid var(--tx-viz-track);
-}
-.sectionCardTitle {
-  font-size: var(--tx-fs-xs);
-  font-weight: 600;
-  color: var(--tx-text-1);
-}
-/* 仪表统计瓦片：值在上、标签在下（对齐 context 的 stat tiles） */
-.statTile {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.statTileValue {
-  font-family: var(--tx-mono);
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  font-size: var(--tx-fs-sm);
-  color: var(--tx-text-1);
-  white-space: nowrap;
-}
-.statTileLabel {
-  font-size: var(--tx-fs-2xs);
-  color: var(--tx-text-3);
-}
-.ringCenterValue {
-  font-family: var(--tx-mono);
-  font-variant-numeric: tabular-nums;
-  font-weight: 600;
-  font-size: 15px;
-  fill: var(--tx-text-1);
-}
-.ringCenterLabel {
-  font-size: 8.5px;
-  fill: var(--tx-text-3);
-}
-/* 任务 id 小背景块（对齐 context 的行内代码片样式） */
-.taskCardId {
-  font-family: var(--tx-mono);
-  font-size: var(--tx-fs-2xs);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  color: var(--tx-text-1);
-  flex-shrink: 0;
-  padding: 1px 6px;
-  border-radius: var(--tx-r-tag);
-  background: color-mix(in srgb, var(--dsw-alias-label-tertiary, #7d828a) 14%, transparent);
-}
-.taskCard[data-state='running'] .taskCardId { color: var(--tx-accent); }
-.taskCard[data-state='completed'] .taskCardId { color: var(--tx-ok); }
-.taskCard[data-state='failed'] .taskCardId { color: var(--tx-bad); }
-
-/* ────────────────────────────────────────────────────────────
-   11. 侧栏页签（right-sidebar 宿主）
+   13. 侧栏页签（right-sidebar 宿主）
    ──────────────────────────────────────────────────────────── */
 .tabTitleIcon { display: inline-flex; vertical-align: -2px; }
 .tabTitleLabel { margin-left: 4px; }
 
 /* ────────────────────────────────────────────────────────────
-   12. 任务轨道图（SVG DAG，P2）
-   ──────────────────────────────────────────────────────────── */
-/* ────────────────────────────────────────────────────────────
-   13. 动效原语（循环动画预算：全屏仅徽标呼吸 1 处；
+   14. 动效原语（循环预算：徽标呼吸 + 正在发生点脉冲；
        animSpin 是用户触发的刷新反馈，不计入常驻预算）
    ──────────────────────────────────────────────────────────── */
 @keyframes teamsx-badge-breath {
@@ -1273,14 +1513,13 @@
   to { transform: rotate(360deg); }
 }
 
-/* ticker 更新：文本直换无动画（4s 高频更新，Emil 频率表） */
+/* 流更新：文本直换无动画（4s 高频更新，Emil 频率表） */
 
 @media (prefers-reduced-motion: reduce) {
-  /* 循环与位移动画全停（含徽标呼吸、刷新 spin、行/节点/边入场）：
-     呼吸停动后改常亮工作色（gentler, not zero —— 状态不靠运动表达） */
+  /* 循环与位移动画全停：呼吸/脉冲停动后改常亮工作色（gentler, not zero） */
   .badgeFab[data-busy],
-  .animSpin,
-  .taskCard {
+  .nowDot,
+  .animSpin {
     animation: none !important;
   }
   .badgeFab[data-busy] {
@@ -1288,15 +1527,11 @@
     border-color: color-mix(in srgb, var(--tx-accent) 45%, transparent) !important;
     color: var(--tx-accent) !important;
   }
+  .nowDot { opacity: 1 !important; }
   /* 面板入场退化为纯 opacity 淡入（gentler, not zero） */
   .panelWindow,
   .panelSheet {
     animation: teamsx-fade-in 120ms ease-out both !important;
-  }
-  /* 几何移动器（transform/geometry）瞬时长，颜色过渡保留（gentler, not zero） */
-  .memberTrackFill,
-  .tickerCaret {
-    transition: none !important;
   }
   .ringSeg {
     transition: stroke var(--tx-dur-ctl) ease-out !important;
@@ -1311,15 +1546,35 @@
   .stopCancel:active,
   .modeOption:active,
   .refreshButton:active,
-  .badgeFab:active,
-  .memberPause:active,
-  .memberLink:active {
+  .badgeFab:active {
     transform: none !important;
   }
 }
 @keyframes teamsx-fade-in {
   from { opacity: 0; }
   to { opacity: 1; }
+}
+
+/* ────────────────────────────────────────────────────────────
+   15. 窄容器降级（移动端抽屉 / 窄屏下拉）
+   ──────────────────────────────────────────────────────────── */
+@media (max-width: 520px) {
+  .headStats { gap: var(--tx-sp-4); }
+  .sl i { display: none; }
+  /* 时间列收进流内：时间随行内联，轨点贴左 */
+  .stream { padding-left: 30px; }
+  .stream::before { left: 8px; }
+  .streamRow { padding-left: 20px; }
+  .streamRow::before { left: -26px; }
+  .streamTime {
+    position: static;
+    display: inline-block;
+    width: auto;
+    text-align: left;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  .nowitem { max-width: 200px; }
 }
 
 /* 焦点可见环：键盘导航必需（accessibility, not optional） */
@@ -1334,12 +1589,16 @@
 .stopCancel:focus-visible,
 .modeOption:focus-visible,
 .refreshButton:focus-visible,
-.memberLink:focus-visible,
-.memberPause:focus-visible,
-.memberInfo:focus-visible,
-.tickerToggle:focus-visible,
-.taskNode:focus-visible,
 .retryButton:focus-visible,
+.nowitem:focus-visible,
+.memberChipInfo:focus-visible,
+.memberChipName:focus-visible,
+.memberChipPause:focus-visible,
+.wm:focus-visible,
+.filterChip:focus-visible,
+.older:focus-visible,
+.tcard:focus-visible,
+.streamWhoBtn:focus-visible,
 .planEditorToggle:focus-visible,
 .planEditorAdd:focus-visible,
 .planEditorRemove:focus-visible,

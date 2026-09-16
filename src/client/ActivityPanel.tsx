@@ -12,9 +12,9 @@
  * anchored under the badge; placement probes elementFromPoint so third-party
  * higher-layer docks (better-sidebar) cannot cover it.
  *
- * v0.9 P0 split: the shared body lives in panel-body.tsx, the team card in
- * team-card.tsx, rows in member-row.tsx / task-row.tsx, the review bar in
- * plan-review.tsx, endpoints in endpoints.ts, API helpers in api.ts, and
+ * v0.10 split: the shared body lives in panel-body.tsx, the team card in
+ * team-card.tsx, the unified timeline in timeline-stream.tsx, the review bar
+ * in plan-review.tsx, endpoints in endpoints.ts, API helpers in api.ts, and
  * formatting in format.ts. This file keeps the session-scoped shell plus the
  * historical export surface (TeamsXPanelBody, PanelTranslate, URL constants).
  * @module dsh-teams-x/client/ActivityPanel

@@ -190,9 +190,12 @@ export async function assembleTeamSnapshot(
     })),
     messageCount: captainUnread.length
       + members.reduce((count, member) => count + member.unread, 0),
-    captainInbox: captainMail.slice(-5).reverse().map((message) => ({
+    // 时间线流的穿插素材：带送达时间戳的最近来信（最新在前）。流需要足够
+    // 的消息才能与操作事件按时间咬合，窗口放宽到 10 条。
+    captainInbox: captainMail.slice(-10).reverse().map((message) => ({
       from: message.from,
       content: message.content,
+      ts: message.ts,
     })),
     operations: await readTeamOperations(stateRoot, state.id, 50),
   }
