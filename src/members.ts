@@ -278,6 +278,31 @@ export async function resolveMemberLlmSelection(
   }
 }
 
+/** Session-lifecycle event name used by dsh 0.1.5, before it became `agent/created`. */
+const LEGACY_SESSION_START_EVENT = 'agent/session-start'
+
+/**
+ * Register a listener under the legacy session-lifecycle event name (dsh 0.1.5).
+ *
+ * The current baseline's `Events` table no longer declares that name, so
+ * registering it as a bare literal fails `tsc` ("not assignable to keyof
+ * Events"). The peerDep floor is `>= 0.1.2-alpha.2` and old baselines only fire
+ * the legacy name, so it has to stay registered. The narrowing below is an
+ * explicit listener signature — deliberately *not* `any`: payload and return
+ * type remain checked, and a future rename of the current `agent/created`
+ * payload surfaces here instead of silently degrading.
+ */
+function onLegacySessionStart(
+  ctx: Context,
+  listener: (payload: { agent: Agent }) => undefined,
+): () => void {
+  const on = ctx.on.bind(ctx) as unknown as (
+    name: typeof LEGACY_SESSION_START_EVENT,
+    listener: (payload: { agent: Agent }) => undefined,
+  ) => () => void
+  return on(LEGACY_SESSION_START_EVENT, listener)
+}
+
 /**
  * Install the member selection bridge for every fresh or cold-resumed
  * continuable child. Fresh creation reads the pending in-memory selection;
@@ -290,27 +315,32 @@ export function installMemberSelectionRuntime(
   onFailureSettled?: (workspace: string, teamId: string, memberName: string) => Promise<void>,
 ): MemberSelectionRuntime {
   const pending = new Map<string, MemberLlmSelection>()
-  // dsh >= 0.1.5 removed the plugin-facing continuable-setup hook. The
-  // supported replacement is `agent/created` (host declaration:
-  // core/agent/src/runtime-types.ts — payload `{ agent, source, signal? }`): it
-  // fires after composition/setup (so the subagent descriptor is already in the
-  // session log) and before the loop starts. `source` carries the lifecycle
-  // distinction: `startup` for seeded creates, `resume` for persisted loads
-  // (also `clear` / `compact`). `payload.agent.ctx` is the agent-scoped context
-  // `installModelSelection` needs.
+  // The plugin-facing continuable-setup hook was removed in dsh 0.1.5; arming
+  // per-child state moved to the session-lifecycle event, which the host
+  // **renamed** between baselines:
   //
-  // NB: this subscription previously read `agent/session-start` — an event the
-  // host never declared. cordis validates event names only at the type level,
-  // so the listener was silently dead at runtime (member model routing and
-  // failure capture never armed) and only `tsc` reported it. Other host plugins
-  // (e.g. experimental/tool-agent-team) subscribe to `agent/created` likewise.
+  //   dsh 0.1.5        `agent/session-start`
+  //   dsh 0.1.6-alpha  `agent/created` (host: core/agent/src/runtime-types.ts,
+  //                    payload `{ agent, source, signal? }`; `source` carries
+  //                    `startup` for seeded creates vs `resume` for persisted
+  //                    loads, also `clear` / `compact`)
+  //
+  // Both names are registered so the plugin keeps working across the peerDep
+  // range: old baselines only fire the legacy name, new ones only fire
+  // `agent/created`. `handleSessionCreated` is idempotent (guarded by
+  // `installed`), so a baseline firing both installs once.
+  //
+  // Note: the former single-name form (`agent/session-start` alone) was not
+  // merely a type error — cordis validates event names only at the type level,
+  // so on 0.1.6 the listener was silently dead at runtime and member model
+  // routing / failure capture never armed.
   const installed = new Map<string, () => void>()
   const disposeDisposed = ctx.on('agent/disposed', (payload) => {
     const id = payload?.agent?.id
     if (id !== undefined) installed.delete(id)
   })
-  const disposeSessionStart = ctx.on('agent/created', (payload) => {
-    const child = payload?.agent
+  const handleSessionCreated = (payload: { agent: Agent }): undefined => {
+    const child = payload.agent
     const childCtx = child?.ctx
     if (child === undefined || childCtx === undefined) return undefined
     if (installed.has(child.id)) return undefined
@@ -422,7 +452,10 @@ export function installMemberSelectionRuntime(
       disposeFailure()
     })
     return undefined
-  })
+  }
+
+  const disposeCreated = ctx.on('agent/created', handleSessionCreated)
+  const disposeLegacyStart = onLegacySessionStart(ctx, handleSessionCreated)
 
   return {
     async withPending<T>(
@@ -443,7 +476,8 @@ export function installMemberSelectionRuntime(
       }
     },
     dispose() {
-      disposeSessionStart()
+      disposeCreated()
+      disposeLegacyStart()
       disposeDisposed()
       for (const dispose of installed.values()) dispose()
       installed.clear()
