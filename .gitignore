@@ -1,6 +1,6 @@
 node_modules/
-node_modules/
-lib/
+# lib/ 有意入库:GitHub 链接安装直接带成品(与 dsh-remote-x / dsh-pangu 一致);
+# prepare 路线不可行——构建依赖未跟踪的本地 deepseek-harness 克隆。
 .mimosa/
 *.tsbuildinfo
 deepseek-harness
