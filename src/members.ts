@@ -158,7 +158,7 @@ export function steerCaptainReport(captain: Pick<Agent, 'steer'>, from: string, 
   try {
     captain.steer(createUserMessage({
       content: [{ type: 'text', text: `TeamsX message from member ${from}:\n\n${content}` }],
-      source: { kind: 'plugin', plugin: 'dsh-teams-x' },
+      source: { kind: 'plugin', plugin: 'dsh-teams-x', form: 'relay' },
     }))
     return true
   } catch {
