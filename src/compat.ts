@@ -71,6 +71,8 @@ export async function deliverToChild(
     if (typeof runtime.followup === 'function') {
       await runtime.followup(captain, childId, content, {
         signal: options.signal,
+        // The fallback exists only for released V3 hosts, whose followup API
+        // requires the retired plugin attribution wrapper.
         source: { kind: 'plugin', plugin: 'dsh-teams-x' },
       })
       return true

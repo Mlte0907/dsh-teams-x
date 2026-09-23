@@ -19,6 +19,7 @@ import { createUserMessage, LlmError, ReasoningEffortId } from '@deepseek-ai/dsh
 import type { SessionId } from '@deepseek-ai/dsh-session'
 import { join } from 'node:path'
 import { deliverToChild, sessionOwnEvents } from './compat.ts'
+import { TEAMS_X_RELAY_SOURCE } from './message-source.ts'
 import {
   acknowledgeMailbox,
   appendMailbox,
@@ -158,7 +159,7 @@ export function steerCaptainReport(captain: Pick<Agent, 'steer'>, from: string, 
   try {
     captain.steer(createUserMessage({
       content: [{ type: 'text', text: `TeamsX message from member ${from}:\n\n${content}` }],
-      source: { kind: 'plugin', plugin: 'dsh-teams-x', form: 'relay' },
+      source: TEAMS_X_RELAY_SOURCE,
     }))
     return true
   } catch {

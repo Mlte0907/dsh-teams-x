@@ -18,6 +18,7 @@ import type { ToolRunContext } from '@deepseek-ai/dsh-tools'
 import { randomUUID } from 'node:crypto'
 import { join } from 'node:path'
 import { drainChildren, readTokenUsage } from './compat.ts'
+import { teamsXNoticeSource } from './message-source.ts'
 import {
   appendTaskProgress,
   appendTeamOperation,
@@ -688,7 +689,7 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
     try {
       captain.followup(createUserMessage({
         content: [{ type: 'text', text: stagedPlanFeedbackContext(prepared.teamName) }],
-        source: { kind: 'plugin', plugin: 'dsh-teams-x', form: 'notice', summary: `Plan "${prepared.teamName}" returned for revision` },
+        source: teamsXNoticeSource(`Plan "${prepared.teamName}" returned for revision`),
       }))
     } catch (error: unknown) {
       // Do not leave the durable UI in a false waiting state when the live
@@ -726,7 +727,7 @@ export function registerTeamsXTools(ctx: Context, config: ToolsConfig): TeamsXRu
     try {
       captain.inject(createUserMessage({
         content: [{ type: 'text', text: stagedPlanDiscardContext(discarded.teamName) }],
-        source: { kind: 'plugin', plugin: 'dsh-teams-x', form: 'notice', summary: `Plan "${discarded.teamName}" discarded` },
+        source: teamsXNoticeSource(`Plan "${discarded.teamName}" discarded`),
       }))
     } catch (error: unknown) {
       ctx.logger.warn(`teams-x: failed to inject discard context for "${discarded.teamId}": ${String(error)}`)

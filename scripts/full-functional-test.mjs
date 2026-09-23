@@ -15,6 +15,8 @@ const quality = await import(join(root, 'lib', 'quality.js'))
 const toolsMod = await import(join(root, 'lib', 'tools.js'))
 const events = await import(join(root, 'lib', 'events.js'))
 const compat = await import(join(root, 'lib', 'compat.js'))
+const members = await import(join(root, 'lib', 'members.js'))
+const messageSources = await import(join(root, 'lib', 'message-source.js'))
 const webRoutes = await import(join(root, 'lib', 'web-routes.js'))
 
 const KNOWN_EVENTS = new Set([
@@ -141,6 +143,26 @@ const WS = sandbox
 const ROOT = stateRootOf(WS)
 
 try {
+  // ══════════════════ V4 消息来源 ══════════════════
+  group('V4 消息来源')
+  {
+    let relayed
+    const relayCaptain = makeAgent('captain-v4', WS, { steer: (message) => { relayed = message } })
+    check(
+      'V4-1',
+      members.steerCaptainReport(relayCaptain, 'member', 'report') && relayed?.source?.kind === 'dsh-teams-x'
+        && relayed.source.form === 'relay' && relayed.source.plugin === undefined,
+      JSON.stringify(relayed?.source),
+    )
+    const notice = messageSources.teamsXNoticeSource('Plan returned for revision')
+    check(
+      'V4-2',
+      notice.kind === 'dsh-teams-x' && notice.form === 'notice'
+        && notice.summary === 'Plan returned for revision' && notice.plugin === undefined,
+      JSON.stringify(notice),
+    )
+  }
+
   // ══════════════════ A 团队管理 ══════════════════
   group('A 团队管理(创建/成员/删除/恢复)')
   {
@@ -653,8 +675,13 @@ try {
     ctxC1.ctx.subagents = { sendMessage: async () => 'ok' }
     check('G12', 'compat.deliverToChild 优先 sendMessage', await compat.deliverToChild(ctxC1.ctx, makeAgent('p', WS), 'c', [], { signal: SIGNAL() }) === true)
     const ctxC2 = makeMockCtx()
-    ctxC2.ctx.subagents = { followup: async () => 'ok' }
-    check('G13', 'sendMessage 缺失 → followup 回退', await compat.deliverToChild(ctxC2.ctx, makeAgent('p', WS), 'c', [], { signal: SIGNAL() }) === true)
+    let legacyFollowupSource
+    ctxC2.ctx.subagents = { followup: async (_parent, _childId, _content, options) => {
+      legacyFollowupSource = options.source
+      return 'ok'
+    } }
+    check('G13', 'sendMessage 缺失 → V3 followup 回退', await compat.deliverToChild(ctxC2.ctx, makeAgent('p', WS), 'c', [], { signal: SIGNAL() }) === true)
+    check('G13b', 'V3 followup 保留旧来源包装', legacyFollowupSource?.kind === 'plugin' && legacyFollowupSource?.plugin === 'dsh-teams-x')
     const ctxC3 = makeMockCtx()
     ctxC3.ctx.subagents = {}
     check('G14', '两者皆无 → false(不抛)', await compat.deliverToChild(ctxC3.ctx, makeAgent('p', WS), 'c', [], { signal: SIGNAL() }) === false)

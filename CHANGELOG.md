@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.2 (2026-09-24)
+
+- Fix: 适配 DSH 0.1.7 Session V4 的 producer-owned message source——成员汇报和计划评审通知改用 `dsh-teams-x` 来源，移除会被原生 V4 拒绝的通用 `kind: "plugin"` 包装。
+
 ## 0.10.1 (2026-09-17)
 
 - Fix: 成员详情浮层被吸附过滤条遮挡——`.memberChipPop` z-index 6→20（与过滤条同处面板滚动容器层叠上下文，须高于其 sticky z-index 10），悬停/聚焦/钉住三通道现可完整盖过「正在发生」条、任务水位行、过滤 chips 与时间流；任务详情浮层（fixed, 70）不受影响。
