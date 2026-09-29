@@ -132,6 +132,7 @@ function registerSidebarTab(ctx: ClientContext, openMember: OpenMember, t: Panel
         kind: HOST_KIND,
         title: () => t('tab'),
         guide: [{
+          id: HOST_ID,
           order: GUIDE_ORDER,
           title: () => t('tab'),
           description: () => t('sidebar.guideDescription'),

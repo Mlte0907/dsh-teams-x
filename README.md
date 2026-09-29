@@ -6,7 +6,7 @@
 
 **TeamsX for DeepSeek Harness** — turn one session into a coordinated multi-agent team: a captain spawns durable member subagents, breaks a goal into a dependency-aware task DAG, and coordinates through direct mailbox messages, with a live all-SVG activity panel.
 
-> 本插件原生面向 **DeepSeek Harness 0.1.5-rc.2**，宿主 API 漂移点全部收敛在 `src/compat.ts` 能力探测层——宿主升级时通常只需改这一个文件。工具命名空间为 `teamsx_*`、状态目录为 `.teams-x`，与宿主内其他团队模式互不干扰。
+> 本插件原生面向 **DeepSeek Harness 0.2.0-rc.1**（`peerDependencies` 已声明 `>=0.2.0-rc.1`），宿主 API 漂移点全部收敛在 `src/compat.ts` 能力探测层——宿主升级时通常只需改这一个文件。工具命名空间为 `teamsx_*`、状态目录为 `.teams-x`，与宿主内其他团队模式互不干扰。
 
 ## 安装
 
