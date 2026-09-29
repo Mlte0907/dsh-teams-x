@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.11.2 (2026-09-29)
+
+- **Fix: 全新安装会失败（`postinstall` 找不到它自己）。** `package.json` 的 `postinstall` 指向 `scripts/postinstall-check.mjs`，但 `files` 白名单里没有 `scripts/`，而 pnpm 对 `github:` 依赖同样按 `files` 打包——于是**任何首次安装**都会得到 `Error: Cannot find module .../scripts/postinstall-check.mjs` 并以 `ELIFECYCLE` 中断。已在其它机器（Windows desktop profile）实测复现。
+  - 讽刺之处：这个检查脚本自己的注释写的就是「best effort — **never fails the install**」，但它恰恰因为模块根本加载不到而让安装失败。
+  - 修法：把 `scripts/postinstall-check.mjs` 单独加入 `files`（只加这一个文件；`prepublishOnly` 用的 `clean-build.mjs` 是发布期在仓库里跑，不需要进包）。
+  - 验证：`npm pack` 后从 tarball 干净解包直接跑 postinstall——bundle 齐全时打印 `plugin bundles present` 退出 0；删掉 `lib/` 后打印缺件提示并**仍然退出 0**，兑现它「绝不使安装失败」的承诺。
+
 ## 0.11.1 (2026-09-29)
 
 - **Fix: `teamsx_update_task` 同一次调用里传 `status` 和 `progress` 时，`status` 被静默丢弃。** `src/tools.ts` 的 progress 分支在追加完笔记、写下 `team.json` 后**无条件 `return`**，真正的状态迁移（`tools.ts:1776-1780`）只有 `progress === undefined` 时才可达。后果：成员按常规流程「标 in_progress + 写进度」永远不生效；随后想直接跳 completed 又会被 claimed-不能跳的规则拒掉，形成看起来像调度器故障的死锁。更糟的是提前返回分支回显的是**未改变**的 `task.status`，工具不报错、还打印 `attempt N → claimed` 这种成功形态的字样。
