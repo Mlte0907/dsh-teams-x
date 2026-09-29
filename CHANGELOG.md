@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.4 (2026-09-29)
+
+- Fix: 聊天内团队卡的「已暂停」徽标改用宿主真实存在的 `--dsw-alias-state-warn-primary`（`packages/client/ui-theme/src/styles/design-platform.css:257`）。此前 `TeamsXCard.module.css` 用的是 `--dsw-alias-state-warning-primary`，宿主没有这个变量，该徽标一直退到硬编码的浅色琥珀色，在深色主题下偏亮。`ActivityPanel.module.css` 早已用的是正确名字，这次把卡片侧对齐到同一处。
+
 ## 0.10.3 (2026-09-29)
 
 - Align to DeepSeek Harness 0.2.0-rc.1:

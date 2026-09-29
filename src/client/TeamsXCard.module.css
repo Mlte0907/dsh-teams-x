@@ -49,8 +49,8 @@
   border-radius: 999px;
   padding: 1px 8px;
   font-size: 10px;
-  color: var(--dsw-alias-state-warning-primary, #f5a623);
-  border: 1px solid var(--dsw-alias-state-warning-primary, #f5a623);
+  color: var(--dsw-alias-state-warn-primary, #f5a623);
+  border: 1px solid var(--dsw-alias-state-warn-primary, #f5a623);
 }
 
 .cardCounts {
