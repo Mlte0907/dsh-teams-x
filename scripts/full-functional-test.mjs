@@ -300,6 +300,29 @@ try {
     await toolOf(registered, 'teamsx_update_task').execute({ task_id: t2.task_id, status: 'completed', attempt_id: claim.attempt_id, output: 'done' }, m2exec)
     await expectError('B7c', 'completed 任务不可再更新', () => toolOf(registered, 'teamsx_update_task').execute({ task_id: t2.task_id, status: 'in_progress', attempt_id: claim.attempt_id }, m2exec), 'terminal task')
 
+    // B8 progress 与 status 同调用（回归：此前 progress 分支提前 return，
+    // status 被静默丢弃且回显旧状态，成员「标 in_progress + 写进度」永远不生效）
+    const t4 = await toolOf(registered, 'teamsx_create_task').execute({ subject: 't4' }, cexec)
+    const claim4 = await toolOf(registered, 'teamsx_claim_task').execute({ task_id: t4.task_id }, m2exec)
+    const combined = await toolOf(registered, 'teamsx_update_task').execute(
+      { task_id: t4.task_id, status: 'in_progress', progress: '正在写第一段实现', attempt_id: claim4.attempt_id }, m2exec)
+    check('B8a', 'progress + status 同调用：返回的是新状态而非旧状态', combined.status === 'in_progress', `got ${combined.status}`)
+    const afterCombined = (await state.readTeam(ROOT, 'perm-team')).tasks.find((x) => x.id === t4.task_id)
+    check('B8b', 'progress + status 同调用：落盘状态已迁移', afterCombined?.status === 'in_progress', `got ${afterCombined?.status}`)
+    check('B8c', 'progress + status 同调用：进度确实写入 progressLog', (afterCombined?.progressLog ?? []).some((e) => e.text === '正在写第一段实现'))
+    await toolOf(registered, 'teamsx_update_task').execute({ task_id: t4.task_id, status: 'completed', output: 'done', attempt_id: claim4.attempt_id }, m2exec)
+    // 纯 note 仍不迁移状态、也不额外产生 task-updated 时间线条目
+    const t5 = await toolOf(registered, 'teamsx_create_task').execute({ subject: 't5' }, cexec)
+    const claim5 = await toolOf(registered, 'teamsx_claim_task').execute({ task_id: t5.task_id }, m2exec)
+    const opsBefore = (await state.readTeam(ROOT, 'perm-team')).operations?.length ?? 0
+    const noteOnly = await toolOf(registered, 'teamsx_update_task').execute(
+      { task_id: t5.task_id, progress: '只记一笔，不改状态', attempt_id: claim5.attempt_id }, m2exec)
+    check('B8d', '纯 progress 不改状态且回显当前状态', noteOnly.status === 'claimed', `got ${noteOnly.status}`)
+    const opsAfter = (await state.readTeam(ROOT, 'perm-team')).operations ?? []
+    check('B8e', '纯 progress 不产生多余的 task-updated 条目', !opsAfter.slice(opsBefore).some((o) => o.action === 'task-updated'))
+    await toolOf(registered, 'teamsx_update_task').execute({ task_id: t5.task_id, status: 'in_progress', attempt_id: claim5.attempt_id }, m2exec)
+    await toolOf(registered, 'teamsx_update_task').execute({ task_id: t5.task_id, status: 'completed', output: 'done', attempt_id: claim5.attempt_id }, m2exec)
+
     // B9 多团队歧义
     const wsC = join(sandbox, 'ws-c')
     const cfgC = { ...CONFIG, stateDir: '.teams-x-c' }

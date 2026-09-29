@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.1 (2026-09-29)
+
+- **Fix: `teamsx_update_task` 同一次调用里传 `status` 和 `progress` 时，`status` 被静默丢弃。** `src/tools.ts` 的 progress 分支在追加完笔记、写下 `team.json` 后**无条件 `return`**，真正的状态迁移（`tools.ts:1776-1780`）只有 `progress === undefined` 时才可达。后果：成员按常规流程「标 in_progress + 写进度」永远不生效；随后想直接跳 completed 又会被 claimed-不能跳的规则拒掉，形成看起来像调度器故障的死锁。更糟的是提前返回分支回显的是**未改变**的 `task.status`，工具不报错、还打印 `attempt N → claimed` 这种成功形态的字样。
+  - 修法：progress 分支改为**仅在同调用没有携带 `status` / `output` 时**才早返回（保持纯笔记调用的原行为与时间线不变）；否则落下去走主路径，进度已挂在 task 上，与状态迁移一并持久化。质量门（`evaluateQualityCompletion`）与迁移合法性校验因此仍然生效——已验证该门在 `status === undefined` 时直接放行（`quality.ts:299`、`:306`），纯笔记不会被误拒。
+  - `progress` 参数描述同步更正：原文写着 "WITHOUT changing status"，既与新的合并语义不符，也在鼓励一种会静默失败的分两次调用。
+  - 回归测试 B8a–B8e 五条：合并调用返回新状态、落盘已迁移、进度确实进 `progressLog`；纯笔记不改状态且不产生多余的 `task-updated` 时间线条目。反向验证：把旧版 `lib/tools.js` 换回去，B8a/B8b 以 `got claimed` 失败、B8c 通过——与实机报告的现象逐字一致。
+  - 该缺陷由本仓库的成员子代理在实跑中独立发现并给出 `team.json` 时间戳佐证，不是本次对齐任务的产物。
+
 ## 0.11.0 (2026-09-29)
 
 - **Fix: 点击成员名跳转恢复**（v0.10.3 记录的已知问题，本版修复）。两处独立根因，都早于 0.2.0-rc.1：
