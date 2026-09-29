@@ -1,25 +1,30 @@
 /**
- * Version-tolerant navigation into durable TeamsX member transcripts.
- * Mirrors the reference implementation: rc.8+ runtimes discover the child in
- * its parent's catalog first, then open it with the exact parent/child/mode
- * address; older runtimes fall back to plain session navigation.
+ * Member-transcript navigation.
+ *
+ * Navigation belongs to the view owner: the client `sessions` service opens
+ * nothing (`ISessions` carries catalog and reference counts only), so the
+ * workspace service performs the selection. The durable subagent address is
+ * still read from the client runtime when it retained one, and otherwise
+ * constructed from the captain/child pair.
  */
-import type { SessionId } from '@deepseek-ai/dsh-session/types';
+import type { UiWorkspace } from '@deepseek-ai/dsh-client-ui-workspace/client';
 import type { SubagentAddress } from '@deepseek-ai/dsh-subagent/client';
-/** Narrow sessions-service face used by the activity panel. */
-export interface TeamsXSessionNavigator {
-    /** Legacy/ordinary session navigation. */
-    open(id: SessionId): void;
-    /** Addressed subagent navigation. */
-    openSubagent?(address: SubagentAddress): void;
-    /** Refresh the exact parent's durable direct-child catalog. */
-    refreshSubagents?(parentSessionId: SessionId): Promise<void>;
+import type { SessionId } from '@deepseek-ai/dsh-session/types';
+/** The one sessions-service member this still reads. */
+export interface TeamsXSessionAddressReader {
     /** Reuse an address already retained by the client runtime when available. */
     subagentAddress?(id: SessionId): SubagentAddress | undefined;
 }
 /**
- * Open one member's persisted transcript. Harness removed cold subagents
- * from the ordinary session list: they must first be rediscovered in their
- * parent's catalog, then opened with the exact parent/child/mode address.
+ * Open one member's persisted transcript.
+ *
+ * Cold subagents are absent from the ordinary session list, so the selection
+ * carries the durable direct-parent address rather than a bare Session id;
+ * that address is what the workspace service resolves to a conversation.
+ * @param uiWorkspace - view owner performing the selection.
+ * @param sessions - client runtime, read only for a retained address.
+ * @param parentSessionId - captain session the member belongs to.
+ * @param childSessionId - member session to display.
+ * @returns `'subagent'` once the address has been handed to the workspace.
  */
-export declare function openTeamsXMember(sessions: TeamsXSessionNavigator, parentSessionId: SessionId, childSessionId: SessionId): Promise<'subagent' | 'session'>;
+export declare function openTeamsXMember(uiWorkspace: Pick<UiWorkspace, 'openSession'>, sessions: TeamsXSessionAddressReader, parentSessionId: SessionId, childSessionId: SessionId): 'subagent';

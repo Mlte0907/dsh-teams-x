@@ -22,7 +22,6 @@ import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { CommandUiContract } from '@deepseek-ai/dsh-client-ui-commands/client'
-import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
 import { ActivityPanel } from './ActivityPanel.tsx'
 import { registerPanelHosts } from './panel-hosts.tsx'
 import { TeamsXHintHost } from './hint-host.tsx'
@@ -32,7 +31,7 @@ import { requestTeamsXPanel } from './open-request.ts'
 import { provideSessions } from './client-runtime.ts'
 import { TEAMSX_LOCALE_NAMESPACE, en, zh } from './locales.ts'
 import type { TeamsXLocaleKey } from './locale-keys.ts'
-import type { TeamsXSessionNavigator } from './session-navigation.ts'
+import { openTeamsXMember } from './session-navigation.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -41,23 +40,27 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** Required services: slots (mount point), locale (dictionaries), sessions (member transcript navigation), uiConversation (card registration). */
-export const inject = ['slots', 'locale', 'sessions', 'uiConversation']
+/** Required services: slots (mount point), locale (dictionaries), sessions (member addresses), uiWorkspace (member navigation), uiConversation (card registration). */
+export const inject = ['slots', 'locale', 'sessions', 'uiWorkspace', 'uiConversation']
 
 export function apply(ctx: ClientContext): void {
   ctx.effect(
     () => ctx.locale.register(TEAMSX_LOCALE_NAMESPACE, { zh, en }),
     'teams-x: dictionaries',
   )
-  const sessions = ctx.sessions as ISessions & TeamsXSessionNavigator
+  const sessions = ctx.sessions
   // Hand the sessions face to the脉搏层 (live-activity) without threading it
   // through four component hops; see client-runtime.
   provideSessions(sessions)
   const openMember = (parentId: string, childId: string): void => {
-    void import('./session-navigation.ts').then(({ openTeamsXMember }) => openTeamsXMember(sessions, parentId as SessionId, childId as SessionId))
-      .catch((error: unknown) => {
-        console.warn(`teams-x: failed to open member transcript ${childId}: ${String(error)}`)
-      })
+    // Imported statically: a dynamic import made tsdown emit a sibling chunk
+    // the host's client-modules loader cannot serve, and the rejection was
+    // swallowed into a console warning.
+    try {
+      openTeamsXMember(ctx.uiWorkspace, sessions, parentId as SessionId, childId as SessionId)
+    } catch (error: unknown) {
+      console.warn(`teams-x: failed to open member transcript ${childId}: ${String(error)}`)
+    }
   }
   ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
     name: 'conversation.session.header.actions',
@@ -66,7 +69,7 @@ export function apply(ctx: ClientContext): void {
     order: 30,
     label: 'TeamsX activity',
     locale: TEAMSX_LOCALE_NAMESPACE,
-  }, (props) => <ActivityPanel {...props} sessions={sessions} openMember={openMember} />))
+  }, (props) => <ActivityPanel {...props} openMember={openMember} />))
   registerConversationCard(ctx, openMember)
   registerTeamsXCommand(ctx)
   registerPanelHintHost(ctx)

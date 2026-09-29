@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.11.0 (2026-09-29)
+
+- **Fix: 点击成员名跳转恢复**（v0.10.3 记录的已知问题，本版修复）。两处独立根因，都早于 0.2.0-rc.1：
+  1. **导航接口已从 `ISessions` 删除**。`openSubagent` / `refreshSubagents` / `open` 三个方法宿主都已移除——导航归视图属主（`packages/api/session-controller/src/client/contract/sessions.ts:49-51`）。旧守卫恒真，于是走 `sessions.open(...)` 抛 TypeError。现改为注入 `uiWorkspace` 并调 `uiWorkspace.openSession(address)`；`openSession` 入参本就是 `SessionTarget`，按其 JSDoc 即「known Session identity **or durable direct-parent subagent address**」。冷子代理不在普通会话列表里，所以仍传 captain/child 的持久地址而非裸 SessionId。
+  2. **打包方式让这段代码根本加载不了**。`src/client/index.tsx` 原本动态 `import('./session-navigation.ts')`，被 `tsdown.config.ts` 编成同步 `require("./session-navigation-2QJqPWyL.cjs")`；宿主只通过 `require.async` 下发 `client.<name>.js` 形态的相对 chunk（`packages/client/modules/src/client/system.ts:335` 的 `CLIENT_CHUNK` 正则），这个名字两关都不过，异常被 `.catch` 吞成一行 warning。现改为静态 import，不再产生 sibling chunk，并删除已入库的 `lib/session-navigation-2QJqPWyL.cjs(.map)` 死文件。
+- 客户端 inject 增加 `uiWorkspace`；`ActivityPanel` 的 `sessions` prop 是**从未被读取的死参数**（实际跳转走 `openMember`），一并移除。
+- 类型改为直接引用宿主真实类型 `@deepseek-ai/dsh-client-ui-workspace/client` 的 `UiWorkspace` 与 `@deepseek-ai/dsh-subagent/client` 的 `SubagentAddress`，不再自造结构类型——这正是 0.10.3 记的「类型盲区」那类问题的反面：自造类型会让未来的签名漂移静默通过 tsc。对应地在 `devDependencies` 补上 `dsh-client-ui-workspace` 的宿主链接、`peerDependencies` 补 `>=0.2.0-rc.1`。
+
 ## 0.10.4 (2026-09-29)
 
 - Fix: 聊天内团队卡的「已暂停」徽标改用宿主真实存在的 `--dsw-alias-state-warn-primary`（`packages/client/ui-theme/src/styles/design-platform.css:257`）。此前 `TeamsXCard.module.css` 用的是 `--dsw-alias-state-warning-primary`，宿主没有这个变量，该徽标一直退到硬编码的浅色琥珀色，在深色主题下偏亮。`ActivityPanel.module.css` 早已用的是正确名字，这次把卡片侧对齐到同一处。

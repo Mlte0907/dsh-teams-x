@@ -25,15 +25,12 @@ import type { TeamActivitySnapshot } from '../snapshot-types.ts';
 import type { PanelTranslate } from './format.ts';
 import { TEAMSX_HALT_URL, TEAMSX_PAUSE_URL, TEAMSX_PLAN_URL, TEAMSX_STATE_URL } from './endpoints.ts';
 import { DISCOVERY_INTERVAL_MS, POLL_INTERVAL_MS, TeamsXPanelBody, type TeamsXPanelBodyProps } from './panel-body.tsx';
-import type { TeamsXSessionNavigator } from './session-navigation.ts';
 export { TEAMSX_STATE_URL, TEAMSX_HALT_URL, TEAMSX_PAUSE_URL, TEAMSX_PLAN_URL };
 export { POLL_INTERVAL_MS, DISCOVERY_INTERVAL_MS };
 export type { PanelTranslate };
 export { TeamsXPanelBody };
 export type { TeamsXPanelBodyProps };
 export interface ActivityPanelProps extends PropsRuntime<'conversation.session.header.actions'>, PropsLocale<'teamsX'> {
-    /** Client sessions service, used to open member transcripts. */
-    readonly sessions: TeamsXSessionNavigator;
     /** Open one member's transcript (wired by the plugin shell). */
     readonly openMember: (parentId: TeamActivitySnapshot['captainSessionId'], childId: string) => void;
 }

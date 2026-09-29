@@ -33,7 +33,6 @@ import { fetchTeams } from './api.ts'
 import { TEAMSX_HALT_URL, TEAMSX_PAUSE_URL, TEAMSX_PLAN_URL, TEAMSX_STATE_URL } from './endpoints.ts'
 import { DISCOVERY_INTERVAL_MS, POLL_INTERVAL_MS, TeamsXPanelBody, useTeamData, type TeamsXPanelBodyProps } from './panel-body.tsx'
 import { setSheetOpen } from './sheet-visibility.ts'
-import type { TeamsXSessionNavigator } from './session-navigation.ts'
 import { onTeamsXPanelRequest } from './open-request.ts'
 
 // Historical export surface: constants moved to endpoints.ts / panel-body.tsx
@@ -46,8 +45,6 @@ export type { TeamsXPanelBodyProps }
 
 export interface ActivityPanelProps
   extends PropsRuntime<'conversation.session.header.actions'>, PropsLocale<'teamsX'> {
-  /** Client sessions service, used to open member transcripts. */
-  readonly sessions: TeamsXSessionNavigator
   /** Open one member's transcript (wired by the plugin shell). */
   readonly openMember: (parentId: TeamActivitySnapshot['captainSessionId'], childId: string) => void
 }
