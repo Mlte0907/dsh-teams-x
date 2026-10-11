@@ -59,8 +59,11 @@ const config: UserConfig = {
     alwaysBundle: (id: string) => !CLIENT_EXTERNALS.includes(id),
   },
   define: {
-    // The client's version literal (src/client/version.ts): the titles render it
-    // synchronously at tab-mint time, so it is inlined rather than fetched.
+    // The ONE place the version enters the code: src/client/version.ts declares
+    // `__TEAMSX_VERSION__` and carries no literal of its own, so bumping the
+    // manifest is enough — and a bundle built without this define renders the
+    // plain titles instead of a stale number (scripts/verify-version.mjs holds
+    // the committed artefacts to it).
     '__TEAMSX_VERSION__': JSON.stringify(MANIFEST.version),
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
     'import.meta.env.MODE': JSON.stringify(process.env.NODE_ENV ?? 'production'),

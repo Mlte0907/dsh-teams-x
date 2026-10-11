@@ -55,8 +55,9 @@ jobs:
       # linked host libs. Typecheck is informational here — the full strict
       # pass pins the patched harness checkout this plugin targets (local
       # stack) and is part of the local `pnpm verify` gate.
-      - name: Runtime verification (smoke + flow + functional suite + icons)
+      - name: Runtime verification (version sourcing + smoke + flow + functional suite + icons)
         run: |
+          pnpm verify:version
           pnpm smoke:client
           pnpm verify:flow
           node scripts/full-functional-test.mjs

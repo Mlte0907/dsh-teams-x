@@ -11,6 +11,7 @@ export const TEAMSX_LOCALE_NAMESPACE = 'teamsX'
 export const zh = {
   'panel.aria': 'TeamsX 活动面板',
   'panel.title': 'TeamsX 团队活动 v{version}',
+  'panel.title.plain': 'TeamsX 团队活动',
   'panel.empty': '暂无团队活动，在会话中说"用 TeamsX 做 X"即可组建团队',
   'panel.pickSession': '先在左侧选择一个会话，这里会显示它的团队活动',
   'panel.refresh': '刷新',
@@ -20,6 +21,7 @@ export const zh = {
   'panel.error': '加载团队状态失败：{message}',
   'panel.stale': '连接断开，显示的是最后一次成功的数据',
   'tab': 'TeamsX v{version}',
+  'tab.plain': 'TeamsX',
   'sidebar.guideDescription': '团队活动：成员、任务依赖与收件箱',
   'team.progressLabel': '已完成',
   'team.phase.staged': '待审批',
@@ -168,6 +170,7 @@ export type TeamsXLocaleKey = keyof typeof zh
 export const en: Record<TeamsXLocaleKey, string> = {
   'panel.aria': 'TeamsX activity panel',
   'panel.title': 'TeamsX team activity v{version}',
+  'panel.title.plain': 'TeamsX team activity',
   'panel.empty': 'No team activity yet. Say "use TeamsX to do X" in a session to assemble a team',
   'panel.pickSession': 'Select a session on the left to see its team activity here',
   'panel.refresh': 'Refresh',
@@ -177,6 +180,7 @@ export const en: Record<TeamsXLocaleKey, string> = {
   'panel.error': 'Failed to load team state: {message}',
   'panel.stale': 'Connection lost — showing the last successful data',
   'tab': 'TeamsX v{version}',
+  'tab.plain': 'TeamsX',
   'sidebar.guideDescription': 'Team activity: members, task dependencies, and mailboxes',
   'team.progressLabel': 'done',
   'team.phase.staged': 'Awaiting approval',

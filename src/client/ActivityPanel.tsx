@@ -34,7 +34,7 @@ import { TEAMSX_HALT_URL, TEAMSX_PAUSE_URL, TEAMSX_PLAN_URL, TEAMSX_STATE_URL } 
 import { DISCOVERY_INTERVAL_MS, POLL_INTERVAL_MS, TeamsXPanelBody, useTeamData, type TeamsXPanelBodyProps } from './panel-body.tsx'
 import { setSheetOpen } from './sheet-visibility.ts'
 import { onTeamsXPanelRequest } from './open-request.ts'
-import { TEAMSX_VERSION } from './version.ts'
+import { versionedTitle } from './version.ts'
 import type { OpenSidebarTab } from './panel-hosts.tsx'
 
 // Historical export surface: constants moved to endpoints.ts / panel-body.tsx
@@ -267,8 +267,8 @@ export function ActivityPanel({ sessionId, t, openMember, openSidebar }: Activit
   const badgeLabel = workingCount > 0
     ? `${translate('panel.aria')} (${workingCount})`
     : translate('panel.aria')
-  // The panel's own title, version included (its locales carry `{version}`).
-  const title = translate('panel.title', { version: TEAMSX_VERSION })
+  // The panel's own title (versioned by this build, plain when it knows none).
+  const title = versionedTitle(translate, 'panel.title')
   const badgeDetail = runningTasks > 0
     ? `${title} · ${translate('task.status.in_progress')} ${runningTasks}`
     : workingCount > 0

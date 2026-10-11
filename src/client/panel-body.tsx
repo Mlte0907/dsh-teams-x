@@ -16,7 +16,7 @@ import { sameTeamsSnapshots } from './snapshot-compare.ts'
 import { TeamCard, type OpenMember } from './team-card.tsx'
 import css from './ActivityPanel.module.css'
 import { GlyphClose, GlyphRefresh, TeamsXLogo } from './icons.ts'
-import { TEAMSX_VERSION } from './version.ts'
+import { versionedTitle } from './version.ts'
 
 /** Poll cadence for the live view. */
 export const POLL_INTERVAL_MS = 4_000
@@ -129,7 +129,7 @@ export function TeamsXPanelBody({ sessionId, t, openMember, onClose }: TeamsXPan
   return (
     <>
       <header className={css.panelHeader}>
-        <h2 className={css.panelTitle}><TeamsXLogo size={18} decorative /> {translate('panel.title', { version: TEAMSX_VERSION })}</h2>
+        <h2 className={css.panelTitle}><TeamsXLogo size={18} decorative /> {versionedTitle(translate, 'panel.title')}</h2>
         <div className={css.panelActions}>
           <div className={css.modeToggle} role='radiogroup' aria-label={translate('panel.live')}>
             <button

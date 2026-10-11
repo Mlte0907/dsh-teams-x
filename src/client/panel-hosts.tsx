@@ -38,7 +38,7 @@ import css from './ActivityPanel.module.css'
 import { TeamsXLogo } from './icons.tsx'
 import { TeamsXPanelBody } from './ActivityPanel.tsx'
 import { TEAMSX_LOCALE_NAMESPACE } from './locales.ts'
-import { TEAMSX_VERSION } from './version.ts'
+import { versionedTitle } from './version.ts'
 import { makeT } from './format.ts'
 import type { PanelTranslate } from './ActivityPanel.tsx'
 import type { TeamActivitySnapshot } from '../snapshot-types.ts'
@@ -132,7 +132,7 @@ function makeTabTitle(t: PanelTranslate): () => ReactElement {
     return (
       <>
         <TeamsXLogo size={16} className={css.tabTitleIcon} decorative />
-        <span className={css.tabTitleLabel}>{translate('tab', { version: TEAMSX_VERSION })}</span>
+        <span className={css.tabTitleLabel}>{versionedTitle(translate, 'tab')}</span>
       </>
     )
   }
@@ -190,11 +190,11 @@ function registerSidebarTab(ctx: ClientContext, openMember: OpenMember, t: Panel
       own(tabs.register({
         id: HOST_ID,
         kind: HOST_KIND,
-        title: () => translate('tab', { version: TEAMSX_VERSION }),
+        title: () => versionedTitle(translate, 'tab'),
         guide: [{
           id: HOST_ID,
           order: GUIDE_ORDER,
-          title: () => translate('tab', { version: TEAMSX_VERSION }),
+          title: () => versionedTitle(translate, 'tab'),
           description: () => translate('sidebar.guideDescription'),
           icon: TeamsXLogo,
         }],

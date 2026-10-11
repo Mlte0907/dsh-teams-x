@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.11.5 (2026-10-11)
+
+- **版本号改成「只在 `package.json` 里写一次」**：`src/client/version.ts` 不再携带任何版本字面量——构建期由 tsdown `define` 注入；注入不到（裸 `tsc`、烟测直接 import 模块文件）就渲染**不带版本号**的标题（`tab.plain` / `panel.title.plain`），而不是渲染一个可能过期、还得靠人记得同步的数字。新增 `scripts/verify-version.mjs`（`pnpm verify:version`，也接进 CI 的同一道门）：校验已入库的 `lib/client.js` 的注入值等于 `package.json`、且 `lib/client/version.js` 与源码里**不含**任何版本字面量——"改了版本号却忘了重建 `lib/`"从此是**失败**，不是静默发出一个错版本。
+
+  0.11.4 那版虽然也走构建期注入，但源码里留了一份兜底字面量，bump 时得手改三处（源 / tsc 产物 / bundle）——那正是这次要消灭的漂移点。
+
 ## 0.11.4 (2026-10-11)
 
 - **Fix: 团队一启动，右栏被 dsh-better-sidebar 的「任务管理」页抢走。** TeamsX 启动团队必然派生成员，而成员就是当前会话的直接子代理——`dsh-better-sidebar` 的 `use-host-feeds.ts`（`activateTasksPage`）正是监听「当前会话首次出现直接子代理（0→N，500ms 防抖）」，宽屏下直接把右栏展开到它的 `subagent` 页（页名即「任务管理」）。用户看到的现象是：用 TeamsX 组队，右栏弹出来的是别人家的任务页。

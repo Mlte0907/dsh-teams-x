@@ -1,6 +1,6 @@
 {
   "name": "dsh-teams-x",
-  "version": "0.11.4",
+  "version": "0.11.5",
   "description": "TeamsX for DeepSeek Harness: durable multi-agent teams (captain, members, dependency-aware tasks, mailboxes) with an all-SVG activity panel. Native to dsh 0.2.1-alpha.2 with a capability-detection compat layer.",
   "type": "module",
   "main": "lib/index.js",
@@ -56,9 +56,10 @@
     "verify:flow": "node --experimental-strip-types scripts/verify-flow.mjs",
     "icons": "node --experimental-strip-types scripts/export-icons.mjs",
     "verify:icons": "node --experimental-strip-types scripts/export-icons.mjs --check",
+    "verify:version": "node --experimental-strip-types scripts/verify-version.mjs",
     "prepublishOnly": "pnpm build && pnpm smoke:client && node scripts/prepublish-guard.mjs",
     "postinstall": "node scripts/postinstall-check.mjs",
-    "verify": "pnpm typecheck && pnpm build && pnpm smoke:client && pnpm verify:flow && node scripts/full-functional-test.mjs && pnpm verify:icons"
+    "verify": "pnpm typecheck && pnpm build && pnpm verify:version && pnpm smoke:client && pnpm verify:flow && node scripts/full-functional-test.mjs && pnpm verify:icons"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4.0.0",
