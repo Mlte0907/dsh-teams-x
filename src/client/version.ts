@@ -15,5 +15,5 @@
 /** Replaced with the package version literal by the client bundle build. */
 declare const __TEAMSX_VERSION__: string | undefined
 
-/** This plugin's version, e.g. `0.11.3`. */
-export const TEAMSX_VERSION: string = typeof __TEAMSX_VERSION__ === 'string' ? __TEAMSX_VERSION__ : '0.11.3'
+/** This plugin's version, e.g. `0.11.4`. */
+export const TEAMSX_VERSION: string = typeof __TEAMSX_VERSION__ === 'string' ? __TEAMSX_VERSION__ : '0.11.4'

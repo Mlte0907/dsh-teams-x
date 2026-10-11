@@ -55,7 +55,7 @@ dsh plugin --profile web add "$(pwd)"
    journalctl -u dsh-web --since '5 minutes ago' | grep -iE 'teams-x|failed'
    ```
 
-2. 打开 Web UI，侧边栏应出现 **TeamsX 活动面板**（全 SVG 渲染）。
+2. 打开 Web UI，右栏应出现 **TeamsX v&lt;版本&gt;** tab（全 SVG 渲染）；本会话一组建团队，右栏会自动弹到这个 tab——刻意的：它抢在 `dsh-better-sidebar` 的「任务管理」页之前把栏占住。
 3. 新会话中让 agent 调 `teamsx_create` 建一个测试团队（如 `{"name":"smoke-test","members":[{"name":"a1"}]}`），确认工具返回团队快照。
 
 > `pnpm build` 后重启宿主即可生效（profile 为 `patchReload: live`）。真实实例验证（工具注册、成员生成、调度、面板轮询）由使用者执行。

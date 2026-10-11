@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.11.4 (2026-10-11)
+
+- **Fix: 团队一启动，右栏被 dsh-better-sidebar 的「任务管理」页抢走。** TeamsX 启动团队必然派生成员，而成员就是当前会话的直接子代理——`dsh-better-sidebar` 的 `use-host-feeds.ts`（`activateTasksPage`）正是监听「当前会话首次出现直接子代理（0→N，500ms 防抖）」，宽屏下直接把右栏展开到它的 `subagent` 页（页名即「任务管理」）。用户看到的现象是：用 TeamsX 组队，右栏弹出来的是别人家的任务页。
+
+  修法**不碰第三方插件**，而是抢在它前面把栏占住——它自己的门禁写着「右栏已展开且当前页不是它的页时，只建页 + 打未读红点，不抢栏」。于是 `ActivityPanel` 在本会话团队**出现那一刻**（staging，早于成员 spawn）就 `ctx.sidebarRight.openTab('teams-x')`：
+
+  - 触发点是 0→N，且基线由**第一次成功读取**武装（`useTeamData` 为此新增 `read` 字段）——刷新页面、切会话、本来就有团队的会话都不会抢布局，只有"团队真的刚出现"才弹。
+  - 触发时刻选在团队出现而不是成员 spawn：中间隔着人工审批，正常情况下稳赢；即便极端情况被它先得手，随后的 `openTab` 也会把栏抢回来。
+  - 窄屏（<768px，宿主把右栏画成全屏抽屉）只放 tab 不展开：原本收起的栏会被复位，手机不会被盖住。
+  - 宿主没有右栏时静默 no-op；`openTab` 抛错被吞并记一条 warn。
+  - 打开**不以本实例注册成功为前置**：热替换后 tab 类型可能仍挂在上一个化身名下（注册表对同 id 二次注册直接 throw），只要 kind 存在就应当能打开。
+
+- **标题带版本号**：右栏 tab chip、引导页条目与面板标题现在读作 `TeamsX v{version}` / `TeamsX 团队活动 v{version}`（徽标 tooltip 同）。版本由 `package.json` 在**构建期**经 tsdown `define` 注入 `src/client/version.ts`（裸 tsc 走字面量兜底）——因为 tab chip 的标题在 tab **铸造那一刻**就固定，早于任何状态请求，取不到宿主版本；三处渲染统一走 `makeT`，宿主 locale 不插值时插件自己插。
+
+  验证：改动过的产物逐个过 `node --check`；用孪生 React 加载**真实** `lib/client.js` 驱动 0→N 端到端，**18 项断言全过**（有/无宿主插值下的三处标题、无团队不弹、0→N 弹 `teams-x`、团队存续期间不重复弹、已有团队重载不弹、窄屏 park、无右栏 no-op、`openTab` 抛错不外泄、热替换注册被拒仍能弹）。
+
+  未在真实窗口目视：测试期间应用窗口停在别的会话，本会话 badge 未挂载、触发条件不成立；页面已按 client-hmr 热重载本改动（Chromium Code Cache 里 8 条不同 rev 的 `…/plugins/??dsh-teams-x/client.js&rev=…`，最后一条在最后一次写盘后 2 秒），**刷新窗口（Ctrl+R）即可生效，无需重启宿主**。`lib/client.js.map` 相对手改后的 bundle 已过期（仅影响 devtools 行号）。本机没有 `link:./deepseek-harness` 开发检出，`pnpm verify` 未跑；CI 的 Runtime verification 一步在上一提交（6da3247）就已红、同一步同样 1 秒暴毙，与本改动无关。
+
 ## 0.11.3 (2026-10-11)
 
 - **Fix: 对齐 dsh 0.2.1-alpha.2 —— 成员派生路径在 0.2.0 之后已被宿主改名，TeamsX 表面可用、实际完全起不来。** 本版把插件从「面向 0.2.0-rc.1」推进到「面向 0.2.1-alpha.2」，共两处硬断点，都在派生/回收成员这条主链路上：

@@ -1,6 +1,6 @@
 {
   "name": "dsh-teams-x",
-  "version": "0.11.3",
+  "version": "0.11.4",
   "description": "TeamsX for DeepSeek Harness: durable multi-agent teams (captain, members, dependency-aware tasks, mailboxes) with an all-SVG activity panel. Native to dsh 0.2.1-alpha.2 with a capability-detection compat layer.",
   "type": "module",
   "main": "lib/index.js",
