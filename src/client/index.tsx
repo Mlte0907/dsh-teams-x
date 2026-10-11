@@ -62,6 +62,11 @@ export function apply(ctx: ClientContext): void {
       console.warn(`teams-x: failed to open member transcript ${childId}: ${String(error)}`)
     }
   }
+  // 0.1.5-only hosts (right Sidebar tab + main-column panel). Deferred and
+  // guarded inside, so an older host simply keeps the badge-only entry — and
+  // the opener it returns no-ops there. The badge is what calls it, once a team
+  // starts for its session: the column pops onto the TeamsX tab.
+  const openSidebar = registerPanelHosts(ctx, openMember)
   ctx.slots.inject('conversation.session.header.actions', () => ctx.slots.register({
     name: 'conversation.session.header.actions',
     id: 'teams-x-activity',
@@ -69,13 +74,10 @@ export function apply(ctx: ClientContext): void {
     order: 30,
     label: 'TeamsX activity',
     locale: TEAMSX_LOCALE_NAMESPACE,
-  }, (props) => <ActivityPanel {...props} openMember={openMember} />))
+  }, (props) => <ActivityPanel {...props} openMember={openMember} openSidebar={openSidebar} />))
   registerConversationCard(ctx, openMember)
   registerTeamsXCommand(ctx)
   registerPanelHintHost(ctx)
-  // 0.1.5-only hosts (right Sidebar tab + main-column panel). Deferred and
-  // guarded inside, so an older host simply keeps the badge-only entry.
-  registerPanelHosts(ctx, openMember)
 }
 
 /**

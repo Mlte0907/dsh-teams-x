@@ -34,6 +34,8 @@ import { TEAMSX_HALT_URL, TEAMSX_PAUSE_URL, TEAMSX_PLAN_URL, TEAMSX_STATE_URL } 
 import { DISCOVERY_INTERVAL_MS, POLL_INTERVAL_MS, TeamsXPanelBody, useTeamData, type TeamsXPanelBodyProps } from './panel-body.tsx'
 import { setSheetOpen } from './sheet-visibility.ts'
 import { onTeamsXPanelRequest } from './open-request.ts'
+import { TEAMSX_VERSION } from './version.ts'
+import type { OpenSidebarTab } from './panel-hosts.tsx'
 
 // Historical export surface: constants moved to endpoints.ts / panel-body.tsx
 // in the v0.9 P0 split; re-exported so existing importers keep working.
@@ -47,6 +49,12 @@ export interface ActivityPanelProps
   extends PropsRuntime<'conversation.session.header.actions'>, PropsLocale<'teamsX'> {
   /** Open one member's transcript (wired by the plugin shell). */
   readonly openMember: (parentId: TeamActivitySnapshot['captainSessionId'], childId: string) => void
+  /**
+   * Reveal the TeamsX tab in the right Sidebar (wired by the plugin shell;
+   * absent — and then a no-op — on a host without that column). Called once
+   * when a team starts for this session; see the team-start effect below.
+   */
+  readonly openSidebar?: OpenSidebarTab
 }
 
 /**
@@ -134,12 +142,16 @@ function usePanelPlacement(
  * The session-scoped shell: a header chip that exists only when THIS session
  * owns or participates in a live team; the expanded panel portals to body.
  */
-export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps): ReactElement | null {
+export function ActivityPanel({ sessionId, t, openMember, openSidebar }: ActivityPanelProps): ReactElement | null {
   const translate = useMemo(() => makeT(t), [t])
   const [expanded, setExpanded] = useState(false)
   const [hasArchived, setHasArchived] = useState(false)
   const badgeRef = useRef<HTMLButtonElement | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
+  // Team-start trigger bookkeeping: armed by the first completed read of this
+  // session's team list, then watched for a 0 → N transition.
+  const teamsArmedRef = useRef(false)
+  const knownTeamsRef = useRef(0)
   const isNarrow = useIsNarrow()
   // The /teamsx slash command expands this panel for its session.
   useEffect(() => (
@@ -153,7 +165,7 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
   ), [sessionId])
   // The badge carries the count only: once expanded, the body polls on its own
   // fast cadence, so this subscription stays on the collapsed schedule.
-  const { teams, error } = useTeamData(false, 'live')
+  const { teams, error, read } = useTeamData(false, 'live')
   // One-shot: if archived teams exist for this session, show the badge
   // even when no live teams exist — the user can browse archive history.
   useEffect(() => {
@@ -173,6 +185,30 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
     team.captainSessionId === sessionId
     || team.members.some((member) => member.id === sessionId)
   )), [teams, sessionId])
+  // A team STARTING pops the right Sidebar onto the TeamsX tab (the opener is
+  // wired by the plugin shell; a host without that column no-ops).
+  //
+  // The trigger is the 0 → N transition, and it is armed by the first COMPLETED
+  // read rather than by the initial empty state: a reload, a session switch,
+  // and a session that already hosts a team must never pop the column, or a
+  // deliberate layout gets fought on every page load. It fires on the moment
+  // the team APPEARS rather than the moment its members spawn, which is what
+  // makes the column this plugin's tab by the time dsh-better-sidebar's own
+  // subagent trigger fires — that trigger leaves a column already expanded on
+  // another page alone, so its 任务管理 page is never the one that shows.
+  useEffect(() => {
+    if (!read) return
+    const known = knownTeamsRef.current
+    if (!teamsArmedRef.current) {
+      // First authoritative read: adopt it as the baseline, never a start.
+      teamsArmedRef.current = true
+      knownTeamsRef.current = sessionTeams.length
+      return
+    }
+    knownTeamsRef.current = sessionTeams.length
+    if (known > 0 || sessionTeams.length === 0) return
+    openSidebar?.()
+  }, [read, sessionTeams, openSidebar])
   const workingCount = sessionTeams.reduce((count, team) => (
     count + team.members.filter((member) => member.activity === 'working').length
   ), 0)
@@ -231,11 +267,13 @@ export function ActivityPanel({ sessionId, t, openMember }: ActivityPanelProps):
   const badgeLabel = workingCount > 0
     ? `${translate('panel.aria')} (${workingCount})`
     : translate('panel.aria')
+  // The panel's own title, version included (its locales carry `{version}`).
+  const title = translate('panel.title', { version: TEAMSX_VERSION })
   const badgeDetail = runningTasks > 0
-    ? `${translate('panel.title')} · ${translate('task.status.in_progress')} ${runningTasks}`
+    ? `${title} · ${translate('task.status.in_progress')} ${runningTasks}`
     : workingCount > 0
-      ? `${translate('panel.title')} · ${t('member.state.working')} ${workingCount}`
-      : translate('panel.title')
+      ? `${title} · ${t('member.state.working')} ${workingCount}`
+      : title
   const badge = (
     <button
       type='button'

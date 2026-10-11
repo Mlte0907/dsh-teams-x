@@ -16,6 +16,7 @@ import { sameTeamsSnapshots } from './snapshot-compare.ts'
 import { TeamCard, type OpenMember } from './team-card.tsx'
 import css from './ActivityPanel.module.css'
 import { GlyphClose, GlyphRefresh, TeamsXLogo } from './icons.ts'
+import { TEAMSX_VERSION } from './version.ts'
 
 /** Poll cadence for the live view. */
 export const POLL_INTERVAL_MS = 4_000
@@ -55,12 +56,20 @@ export function useTeamData(expanded: boolean, viewMode: 'live' | 'archive'): {
   error?: string
   stale: boolean
   busy: boolean
+  /**
+   * Whether a read has completed at least once. Before it, "no teams" means
+   * "nothing loaded yet" — the panel's own console is empty, not a session
+   * without a team — which is what a 0 → N team-start trigger needs to tell
+   * apart from a fresh page load.
+   */
+  read: boolean
   reload: () => void
 } {
   const [teams, setTeams] = useState<TeamActivitySnapshot[]>([])
   const [error, setError] = useState<string | undefined>(undefined)
   const [stale, setStale] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [read, setRead] = useState(false)
   const [tick, setTick] = useState(0)
   // Once this session is known to host teams, the collapsed badge graduates
   // from the slow discovery cadence to the fast one — its working state (and
@@ -75,6 +84,7 @@ export function useTeamData(expanded: boolean, viewMode: 'live' | 'archive'): {
         if (disposed) return
         setTeams((prev) => (sameTeamsSnapshots(prev, data) ? prev : data))
         setFast(data.length > 0)
+        setRead(true)
         setError(undefined)
         setStale(false)
       } catch (cause: unknown) {
@@ -103,7 +113,7 @@ export function useTeamData(expanded: boolean, viewMode: 'live' | 'archive'): {
     setTick((value) => value + 1)
   }, [])
 
-  return { teams, error, stale, busy, reload }
+  return { teams, error, stale, busy, read, reload }
 }
 
 export function TeamsXPanelBody({ sessionId, t, openMember, onClose }: TeamsXPanelBodyProps): ReactElement {
@@ -119,7 +129,7 @@ export function TeamsXPanelBody({ sessionId, t, openMember, onClose }: TeamsXPan
   return (
     <>
       <header className={css.panelHeader}>
-        <h2 className={css.panelTitle}><TeamsXLogo size={18} decorative /> {translate('panel.title')}</h2>
+        <h2 className={css.panelTitle}><TeamsXLogo size={18} decorative /> {translate('panel.title', { version: TEAMSX_VERSION })}</h2>
         <div className={css.panelActions}>
           <div className={css.modeToggle} role='radiogroup' aria-label={translate('panel.live')}>
             <button

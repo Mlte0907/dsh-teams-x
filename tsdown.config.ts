@@ -37,10 +37,13 @@ const VENDORED_LIBRARY = /^@deepseek-ai\/(cosmokit|schemastery)(\/|$)/
 const CSS_VIRTUAL_PREFIX = '\0teamsx-css:'
 const CSS_VIRTUAL_SUFFIX = '.mjs'
 
-/** Module id this bundle registers under via `__ModuleLoader__.load`. */
-const PLUGIN_ID: string = JSON.parse(
+/** Package manifest: the bundle's registered module id and the version its titles carry. */
+const MANIFEST: { name: string, version: string } = JSON.parse(
   readFileSync(new URL('./package.json', import.meta.url), 'utf8'),
-).name
+)
+
+/** Module id this bundle registers under via `__ModuleLoader__.load`. */
+const PLUGIN_ID: string = MANIFEST.name
 
 const config: UserConfig = {
   name: `${PLUGIN_ID}/client`,
@@ -56,6 +59,9 @@ const config: UserConfig = {
     alwaysBundle: (id: string) => !CLIENT_EXTERNALS.includes(id),
   },
   define: {
+    // The client's version literal (src/client/version.ts): the titles render it
+    // synchronously at tab-mint time, so it is inlined rather than fetched.
+    '__TEAMSX_VERSION__': JSON.stringify(MANIFEST.version),
     'process.env.NODE_ENV': JSON.stringify(process.env.NODE_ENV ?? 'production'),
     'import.meta.env.MODE': JSON.stringify(process.env.NODE_ENV ?? 'production'),
     'import.meta.env': JSON.stringify({ MODE: process.env.NODE_ENV ?? 'production' }),
