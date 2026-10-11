@@ -56,7 +56,7 @@ export const PERSONA_PROTOCOL_MAX_CHARS = 400
 /**
  * Restore the SessionId brand on a value that round-tripped through the
  * durable team file. The brand is erased by JSON serialization; the value
- * originated from `startContinuable`/`agent.id`, so this cast is the boundary
+ * originated from `startActivation`/`agent.id`, so this cast is the boundary
  * restoration, not a new assertion.
  */
 function brandedSessionId(value: string): SessionId {
@@ -673,7 +673,7 @@ export async function spawnMember(
   }
   const label = `${MEMBER_LABEL_PREFIX}${team.id}:${member.name}`
   const start = await selections.withPending(captain.id, label, llmSelection, () => (
-    ctx.subagents.startContinuable({
+    ctx.subagents.startActivation({
       provider: config.provider,
       label,
       request: {

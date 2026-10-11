@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.11.3 (2026-10-11)
+
+- **Fix: 对齐 dsh 0.2.1-alpha.2 —— 成员派生路径在 0.2.0 之后已被宿主改名，TeamsX 表面可用、实际完全起不来。** 本版把插件从「面向 0.2.0-rc.1」推进到「面向 0.2.1-alpha.2」，共两处硬断点，都在派生/回收成员这条主链路上：
+
+  1. **`src/members.ts` 调用了宿主已删除的 `subagents.startContinuable()`。** 0.2.1-alpha.2 的 `subagents` 服务上**不再有** `startContinuable`，取而代之的是 `startActivation(spec)`；两者 spec 形状一致（`provider` / `label` / `request.{prompt,parent,persona,toolFilter,agentOptions,maxDepth}` / `signal`），返回值同样含 `childId`，所以是一处纯改名。后果是**任何 approve 之后的成员派生都会直接抛 `TypeError: ctx.subagents.startContinuable is not a function`**——插件能挂载、13 个 `teamsx_*` 工具都能注册，但一旦真要组队就全盘失败，属于最难自查的那种坏法。已改为 `startActivation`。
+  2. **`src/compat.ts` 的 `drainChildren()` 只探测已删除的 `drainContinuableChildren`。** 0.2.1-alpha.2 把它换成了 `drainChildren(parent, childIds)`（参数列表完全一致，只换了名字）。原实现的 `typeof` 守卫恒不成立，于是 delete / halt 路径永远返回 `'unavailable'`：中断信号发得出去，但激活句柄**不会被真正释放**。现按 compat 层「优先新面、再优雅降级」的既定策略，先探测 `drainChildren`，再退回 `drainContinuableChildren`，最后才返回 `'unavailable'`。
+
+- **元数据对齐：`peerDependencies` 的 `>=0.2.0-rc.1` 在 semver 下根本不接受 0.2.1-alpha.2。** 按 semver §11.3，预发布版本只有在比较子共享同一 `[major,minor,patch]` 元组时才会被范围接纳，而 `>=0.2.0-rc.1` 的元组是 `0.2.0`、宿主是 `0.2.1`。用本机 DSH 自带的那份 semver 实测：
+
+  ```
+  semver.satisfies('0.2.1-alpha.2', '>=0.2.0-rc.1')    === false
+  semver.satisfies('0.2.1-alpha.2', '>=0.2.1-alpha.2') === true
+  ```
+
+  即插件声明的兼容区间一直把自己正在运行的宿主排除在外。因为这些 peer 全在 `peerDependenciesMeta` 里标了 `optional`，安装不会被挡住，所以这个错误此前一直静默。14 个 `@deepseek-ai/dsh-*` peer 统一改为 `>=0.2.1-alpha.2`；由于 `startActivation` 在 0.2.0 上并不存在，收紧这个下限也是**如实**反映代码现状，不是额外收紧。`description` 里的「Native to dsh 0.2.0-rc.1」同步更正。
+
+- **`compat.ts` 头部注释整段重写。** 原文声称插件「natively targets 0.1.3-alpha.1 source checkout」，并把若干漂移点写成 `alpha.2`/`alpha.3`——而 DSH 的版本序列里根本没有 0.1.3-alpha.1 这种写法，且 `drainContinuableChildren` 被写成「老宿主上可选」，与事实相反（它在 0.2.0 存在、在 0.2.1 才消失）。现在逐条写成 0.2.1-alpha.2 的真实状态，并显式记录一条设计约定：**成员派生不放进 compat 层**——它没有可降级的第二条路径，必须靠版本对齐而不是能力探测，所以留在 `members.ts` 里直接调用。
+
+- **本版的核对方式，以及它的边界。** 把插件 `lib/` 里每一处宿主调用，与从本机 `app.asar`（`@deepseek-ai/dsh-desktop` 0.2.1-alpha.2，build `d7432673`）里取出的真实宿主源码逐条对账：23 个不同的宿主成员、91 处调用点。结论是 **除上述两处外没有其它破坏性漂移**——包括一个此前被怀疑的点：`ctx.subagents.interrupt(id, { kind: 'ancestor', agent })` 的签名、以及 Agent 句柄上的 `followup/steer/inject/cancel/whenIdle`（这些实现在 `dsh-agent-loop` 而非 `dsh-agent`，查错包会误判成「调用了不存在的方法」）。
+  **未覆盖**：`pnpm typecheck` / `pnpm build` / `scripts/full-functional-test.mjs` 都没有跑——它们依赖 `devDependencies` 里那批 `link:./deepseek-harness/...` 的宿主源码检出，本机不存在。`lib/` 的改动是照着 `src/` 手工镜像的（改动本身是纯改名 + 分支重排，不涉及编译期行为）。**合并前请在有宿主检出的机器上跑一次 `pnpm verify`。**
+
 ## 0.11.2 (2026-09-29)
 
 - **Fix: 全新安装会失败（`postinstall` 找不到它自己）。** `package.json` 的 `postinstall` 指向 `scripts/postinstall-check.mjs`，但 `files` 白名单里没有 `scripts/`，而 pnpm 对 `github:` 依赖同样按 `files` 打包——于是**任何首次安装**都会得到 `Error: Cannot find module .../scripts/postinstall-check.mjs` 并以 `ELIFECYCLE` 中断。已在其它机器（Windows desktop profile）实测复现。
